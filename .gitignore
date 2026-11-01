@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+web-frontend/node_modules/
+
+# Production builds
+dist/
+web-frontend/dist/
+
+# Logs & temp
+*.log
+.DS_Store
+.idea/
+.vscode/
