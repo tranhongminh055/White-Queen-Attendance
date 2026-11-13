@@ -9,7 +9,9 @@ import SettingsModal from './components/SettingsModal.vue'
 import CustomCursor from './components/CustomCursor.vue'
 import CookieBanner from './components/CookieBanner.vue'
 import LoginView from './components/LoginView.vue'
+import RegisterView from './components/RegisterView.vue'
 import { storage } from './utils/storage'
+import { sound } from './utils/sound'
 
 // Start on 'landing' (The exact facEthic UI from screenshot)
 const currentTab = ref('landing')
@@ -17,7 +19,65 @@ const showSettings = ref(false)
 const notifications = ref([])
 const globalStats = ref({ present: 0, total: 0 })
 
+const cookiesAccepted = ref(localStorage.getItem('facethic_cookies') === 'accepted')
+const showCookieBanner = ref(!cookiesAccepted.value)
+const cookieAttention = ref(false)
+
+function triggerCookieAttention() {
+  showCookieBanner.value = true
+  cookieAttention.value = false
+  requestAnimationFrame(() => {
+    cookieAttention.value = true
+    setTimeout(() => {
+      cookieAttention.value = false
+    }, 500)
+  })
+}
+
+function handleCookieAccept() {
+  cookiesAccepted.value = true
+  showCookieBanner.value = false
+  sound.playSuccess()
+  addNotification({
+    type: 'success',
+    message: 'Đã chấp nhận Cookie. Bạn có thể chuyển trang ngay!'
+  })
+}
+
+function handleCookieReject() {
+  cookiesAccepted.value = false
+  showCookieBanner.value = false
+  sound.playWarning()
+  addNotification({
+    type: 'warning',
+    message: 'Bạn đã từ chối Cookie — chuyển trang tạm thời bị dừng cho đến khi Accept.'
+  })
+}
+
+const protectedTabs = ['scanner', 'enrollment', 'dashboard']
+
 function handleTabChange(tab) {
+  if (tab !== 'landing' && !cookiesAccepted.value) {
+    sound.playWarning()
+    triggerCookieAttention()
+    addNotification({
+      type: 'warning',
+      message: 'Vui lòng nhấn Accept Cookie trước khi chuyển trang!'
+    })
+    return
+  }
+
+  if (protectedTabs.includes(tab) && !storage.getCurrentProfile()) {
+    sound.playWarning()
+    addNotification({
+      type: 'warning',
+      message: 'Vui lòng đăng ký và đăng nhập tài khoản trước khi đăng ký khuôn mặt hoặc điểm danh!'
+    })
+    currentTab.value = 'login'
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+
   if (tab === 'settings') {
     showSettings.value = true
   } else {
@@ -57,9 +117,9 @@ onMounted(() => {
     <!-- Custom Follower Ring Cursor matching facEthic -->
     <CustomCursor />
 
-    <!-- Show Top Nav on app screens, or custom nav on Landing/Login -->
+    <!-- Show Top Nav on app screens, or custom nav on Landing/Auth/Enrollment -->
     <HeaderNav 
-      v-if="currentTab !== 'landing' && currentTab !== 'login'"
+      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'enrollment'"
       :current-tab="currentTab" 
       :stats="globalStats"
       @update:tab="handleTabChange" 
@@ -74,10 +134,17 @@ onMounted(() => {
           @navigate="handleTabChange" 
         />
 
-        <!-- SpaceX 3D Papercut Login Page -->
+        <!-- SpaceX Biometric Login Page -->
         <LoginView 
           v-else-if="currentTab === 'login'" 
           @navigate="handleTabChange" 
+          @notify="addNotification"
+        />
+
+        <!-- SpaceX Biometric Register Page -->
+        <RegisterView
+          v-else-if="currentTab === 'register'"
+          @navigate="handleTabChange"
           @notify="addNotification"
         />
 
@@ -91,6 +158,7 @@ onMounted(() => {
         <!-- Student Face Registration -->
         <EnrollmentView 
           v-else-if="currentTab === 'enrollment'" 
+          @navigate="handleTabChange"
           @notify="addNotification"
         />
 
@@ -109,8 +177,14 @@ onMounted(() => {
       @notify="addNotification"
     />
 
-    <!-- Cookie Banner (hidden on login screen for clean look) -->
-    <CookieBanner v-if="currentTab !== 'login'" />
+    <!-- Cookie Banner (hidden on auth screens unless blocking redirect) -->
+    <CookieBanner
+      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'enrollment'"
+      :visible="showCookieBanner"
+      :attention="cookieAttention"
+      @accept="handleCookieAccept"
+      @reject="handleCookieReject"
+    />
 
     <!-- Toast Notifications Stack -->
     <div class="toast-container">

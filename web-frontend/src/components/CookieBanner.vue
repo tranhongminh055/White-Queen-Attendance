@@ -1,30 +1,38 @@
 <script setup>
-import { ref } from 'vue'
+defineProps({
+  visible: {
+    type: Boolean,
+    default: true
+  },
+  attention: {
+    type: Boolean,
+    default: false
+  }
+})
 
-// Always visible initially by default as requested
-const isVisible = ref(true)
+const emit = defineEmits(['accept', 'reject'])
 
 function accept() {
-  isVisible.value = false
   localStorage.setItem('facethic_cookies', 'accepted')
+  emit('accept')
 }
 
 function reject() {
-  isVisible.value = false
   localStorage.setItem('facethic_cookies', 'rejected')
+  emit('reject')
 }
 </script>
 
 <template>
   <transition name="slide-up">
-    <div v-if="isVisible" class="cookie-banner-wrapper">
+    <div v-if="visible" class="cookie-banner-wrapper" :class="{ attention }">
       <div class="cookie-container">
         <!-- Left: Text info -->
         <div class="cookie-text-col">
           <div class="cookie-headline">We use Cookies</div>
           <p class="cookie-description">
-            We use cookies and similar technologies to improve your experience. Learn more about our 
-            <a href="#cookie-policy" class="cookie-link">Cookie Policy</a>
+            We use cookies and similar technologies to improve your experience. Learn more about our
+            <a href="#cookie-policy" class="cookie-link" @click.prevent>Cookie Policy</a>
           </p>
         </div>
 
@@ -55,6 +63,21 @@ function reject() {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.8);
   padding: 18px 48px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.cookie-banner-wrapper.attention {
+  border-top-color: #FFE600;
+  box-shadow: 0 -10px 40px rgba(255, 230, 0, 0.28);
+  animation: cookieShake 0.42s ease;
+}
+
+@keyframes cookieShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
 }
 
 .cookie-container {
