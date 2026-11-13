@@ -56,19 +56,19 @@ function save() {
         <div class="input-group">
           <label class="input-label">Chế độ vận hành</label>
           <div class="radio-cards">
-            <label class="radio-card" :class="{ checked: settings.useMock }">
-              <input type="radio" v-model="settings.useMock" :value="true" name="mode" />
-              <div>
-                <strong>Chế độ Mô phỏng / Thử nghiệm nhanh</strong>
-                <small>Dùng WebRTC camera thực tế + lưu trữ dữ liệu tại máy để thử nghiệm tính năng ngay.</small>
-              </div>
-            </label>
-
             <label class="radio-card" :class="{ checked: !settings.useMock }">
               <input type="radio" v-model="settings.useMock" :value="false" name="mode" />
               <div>
-                <strong>Kết nối Backend Thực tế (Spring Boot + Python)</strong>
-                <small>Gửi request thực tế tới REST API của Java Spring Boot.</small>
+                <strong>AI Sinh trắc học Trực tiếp trên Trình duyệt (WebRTC + ResNet-34 128-D)</strong>
+                <small>Phân tích 68 điểm khuôn mặt thật và lưu vector nhận diện 128 chiều cục bộ.</small>
+              </div>
+            </label>
+
+            <label class="radio-card" :class="{ checked: settings.useMock }">
+              <input type="radio" v-model="settings.useMock" :value="true" name="mode" />
+              <div>
+                <strong>Kết nối Backend Mở rộng (Spring Boot + Python)</strong>
+                <small>Gửi request đồng bộ tới REST API máy chủ ngoài.</small>
               </div>
             </label>
           </div>

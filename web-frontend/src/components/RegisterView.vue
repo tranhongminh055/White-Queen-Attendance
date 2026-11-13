@@ -13,7 +13,7 @@ import {
 } from '../utils/validation'
 import heroBiometricImg from '../assets/hero-biometric.jpg'
 
-const emit = defineEmits(['navigate', 'notify'])
+const emit = defineEmits(['navigate', 'back', 'notify'])
 
 const fullName = ref('')
 const employeeId = ref('')
@@ -219,8 +219,8 @@ function handleRegisterSubmit() {
           <span class="sx-brand-sub">BIOMETRIC AI</span>
         </div>
 
-        <button class="sx-back-link" @click="emit('navigate', 'landing')" title="Quay về Trang chủ">
-          ← Trang chủ
+        <button class="sx-back-link" @click="emit('back')" title="Quay lại trang trước">
+          ← Quay lại
         </button>
       </header>
 

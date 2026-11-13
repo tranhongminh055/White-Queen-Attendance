@@ -9,17 +9,50 @@ defineProps({
   stats: {
     type: Object,
     default: () => ({ present: 0, total: 0 })
+  },
+  canBack: {
+    type: Boolean,
+    default: false
+  },
+  canForward: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['update:tab'])
+const emit = defineEmits(['update:tab', 'back', 'forward'])
 </script>
 
 <template>
   <header class="header">
     <div class="header-container">
-      <!-- SpaceX Brand Logo -->
-      <SpaceXLogo @click="emit('update:tab', 'landing')" title="Quay về Trang chủ SpaceX" />
+      <div class="header-left-group">
+        <div class="history-arrows">
+          <button
+            type="button"
+            class="hist-btn"
+            :disabled="!canBack"
+            @click="emit('back')"
+            title="Quay lại"
+            aria-label="Quay lại"
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            class="hist-btn"
+            :disabled="!canForward"
+            @click="emit('forward')"
+            title="Tiến tới"
+            aria-label="Tiến tới"
+          >
+            →
+          </button>
+        </div>
+
+        <!-- SpaceX Brand Logo -->
+        <SpaceXLogo @click="emit('update:tab', 'landing')" title="Quay về Trang chủ SpaceX" />
+      </div>
 
       <!-- Navigation Tabs -->
       <nav class="nav-tabs">
@@ -118,6 +151,43 @@ const emit = defineEmits(['update:tab'])
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+}
+
+.header-left-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.history-arrows {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.hist-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.7);
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.hist-btn:hover:not(:disabled) {
+  border-color: rgba(56, 189, 248, 0.65);
+  color: #38bdf8;
+}
+
+.hist-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .brand {

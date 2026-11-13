@@ -1,13 +1,14 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onBeforeUnmount } from 'vue'
 import SpaceXLogo from './SpaceXLogo.vue'
 import SpaceXWatermark from './SpaceXWatermark.vue'
 import { sound } from '../utils/sound'
 import { storage } from '../utils/storage'
+import { faceEngine } from '../utils/faceEngine'
 import { validateLoginIdentifier, validateLoginPassword } from '../utils/validation'
 import heroBiometricImg from '../assets/hero-biometric.jpg'
 
-const emit = defineEmits(['login-success', 'navigate', 'notify'])
+const emit = defineEmits(['login-success', 'navigate', 'back', 'notify'])
 
 const username = ref('')
 const password = ref('')
@@ -59,7 +60,11 @@ function handleLogin() {
     const studentRecord = students.find(
       s => (s.id || '').toUpperCase() === result.account.employeeId.toUpperCase()
     )
-    const hasFaceEnrolled = Boolean(studentRecord?.embeddingCreated)
+    const hasFaceEnrolled = Boolean(
+      studentRecord?.embeddingCreated &&
+        Array.isArray(studentRecord?.descriptors) &&
+        studentRecord.descriptors.length > 0
+    )
 
     storage.setCurrentProfile({
       id: result.account.employeeId,
@@ -76,9 +81,9 @@ function handleLogin() {
     if (!hasFaceEnrolled) {
       emit('notify', {
         type: 'info',
-        message: `Đăng nhập thành công! Vui lòng hoàn tất đăng ký khuôn mặt cho ${result.account.fullName}.`
+        message: `Đăng nhập thành công! Vui lòng đăng ký khuôn mặt cho ${result.account.fullName}.`
       })
-      emit('navigate', 'enrollment')
+      emit('navigate', 'face-intro')
       return
     }
 
@@ -86,14 +91,117 @@ function handleLogin() {
       type: 'success',
       message: `Đăng nhập thành công! Chào mừng ${result.account.fullName} trở lại hệ thống SpaceX.`
     })
-    emit('navigate', 'scanner')
+    emit('navigate', 'face-intro')
   }, 450)
 }
 
-function handleFaceLogin() {
-  sound.playBeep()
-  emit('navigate', 'scanner')
+const showFaceModal = ref(false)
+const faceVideoRef = ref(null)
+const faceModalStatus = ref('Đang khởi tạo camera & AI...')
+const faceModalError = ref('')
+let faceLoginTimer = null
+
+function closeFaceLoginModal() {
+  showFaceModal.value = false
+  if (faceLoginTimer) {
+    clearTimeout(faceLoginTimer)
+    faceLoginTimer = null
+  }
+  if (faceVideoRef.value?.srcObject) {
+    faceVideoRef.value.srcObject.getTracks().forEach(t => t.stop())
+    faceVideoRef.value.srcObject = null
+  }
 }
+
+async function handleFaceLogin() {
+  sound.playBeep()
+  const enrolled = storage
+    .getStudents()
+    .filter(s => s.embeddingCreated && Array.isArray(s.descriptors) && s.descriptors.length > 0)
+
+  if (enrolled.length === 0) {
+    sound.playWarning()
+    emit('notify', {
+      type: 'warning',
+      message: 'Chưa có tài khoản nào đăng ký khuôn mặt thật! Vui lòng đăng nhập bằng mật khẩu trước.'
+    })
+    return
+  }
+
+  showFaceModal.value = true
+  faceModalError.value = ''
+  faceModalStatus.value = 'Đang bật camera thật & tải mô hình AI...'
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+      audio: false
+    })
+    if (!showFaceModal.value) {
+      stream.getTracks().forEach(t => t.stop())
+      return
+    }
+    if (faceVideoRef.value) {
+      faceVideoRef.value.srcObject = stream
+      await faceVideoRef.value.play().catch(() => {})
+    }
+    await faceEngine.loadModels()
+    faceModalStatus.value = 'Hãy nhìn thẳng vào camera để xác thực...'
+    runFaceLoginCheck(enrolled)
+  } catch {
+    faceModalError.value = 'Không thể truy cập camera để đăng nhập bằng khuôn mặt.'
+  }
+}
+
+async function runFaceLoginCheck(enrolled) {
+  if (!showFaceModal.value || !faceVideoRef.value) return
+  try {
+    if (faceVideoRef.value.readyState >= 2) {
+      const extracted = await faceEngine.extractDescriptor(faceVideoRef.value)
+      if (extracted?.descriptor) {
+        const match = faceEngine.matchDescriptor(extracted.descriptor, enrolled, 0.5)
+        if (match.matched) {
+          const matchedStudent = match.student
+          const account = storage
+            .getAccounts()
+            .find(a => a.employeeId.toUpperCase() === matchedStudent.id.toUpperCase())
+
+          storage.setCurrentProfile({
+            id: matchedStudent.id,
+            fullName: account?.fullName || matchedStudent.name,
+            email: account?.email || matchedStudent.email,
+            role: account?.role || 'student',
+            classId: matchedStudent.classId || 'CNTT-K21A',
+            embeddingCreated: true
+          })
+
+          closeFaceLoginModal()
+          sound.playSuccess()
+          emit('login-success')
+          emit('notify', {
+            type: 'success',
+            message: `Xác thực khuôn mặt thành công (${match.confidence})! Xin chào ${matchedStudent.name}.`
+          })
+          emit('navigate', 'face-intro')
+          return
+        }
+        faceModalStatus.value = 'Chưa khớp dữ liệu khuôn mặt — tiếp tục quét...'
+      } else {
+        faceModalStatus.value = 'Đưa khuôn mặt vào giữa khung camera...'
+      }
+    }
+  } catch {
+    // Retry on next frame
+  }
+
+  if (showFaceModal.value) {
+    faceLoginTimer = setTimeout(() => runFaceLoginCheck(enrolled), 300)
+  }
+}
+
+onBeforeUnmount(() => {
+  closeFaceLoginModal()
+})
 
 function handleForgotPassword() {
   sound.playBeep()
@@ -178,8 +286,8 @@ function handleForgotPassword() {
           <span class="sx-brand-sub">BIOMETRIC AI</span>
         </div>
 
-        <button class="sx-back-link" @click="emit('navigate', 'landing')" title="Quay về Trang chủ">
-          ← Trang chủ
+        <button class="sx-back-link" @click="emit('back')" title="Quay lại trang trước">
+          ← Quay lại
         </button>
       </header>
 
@@ -315,6 +423,23 @@ function handleForgotPassword() {
         </div>
       </footer>
     </section>
+
+    <!-- REAL CAMERA FACE LOGIN MODAL -->
+    <div v-if="showFaceModal" class="sx-face-modal-backdrop" @click.self="closeFaceLoginModal">
+      <div class="sx-face-modal">
+        <div class="sx-fm-header">
+          <span>XÁC THỰC KHUÔN MẶT THỜI GIAN THỰC</span>
+          <button type="button" class="sx-fm-close" @click="closeFaceLoginModal">✕</button>
+        </div>
+        <div class="sx-fm-cam">
+          <video ref="faceVideoRef" autoplay playsinline muted class="sx-fm-video"></video>
+          <div class="sx-fm-reticle"></div>
+        </div>
+        <div class="sx-fm-status" :class="{ err: faceModalError }">
+          {{ faceModalError || faceModalStatus }}
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -896,5 +1021,85 @@ function handleForgotPassword() {
   .sx-login-panel {
     padding: 24px 24px 32px;
   }
+}
+
+.sx-face-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(2, 4, 8, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.sx-face-modal {
+  width: 100%;
+  max-width: 440px;
+  background: #06090e;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 4px;
+  padding: 16px;
+}
+
+.sx-fm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: #38bdf8;
+  margin-bottom: 12px;
+}
+
+.sx-fm-close {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #94a3b8;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+}
+
+.sx-fm-cam {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #020408;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sx-fm-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.sx-fm-reticle {
+  position: absolute;
+  width: 160px;
+  height: 200px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+  pointer-events: none;
+}
+
+.sx-fm-status {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #cbd5e1;
+}
+
+.sx-fm-status.err {
+  color: #fb7185;
 }
 </style>

@@ -1,29 +1,32 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { storage } from '../utils/storage'
+import { faceEngine } from '../utils/faceEngine'
 import { sound } from '../utils/sound'
 
 const emit = defineEmits(['notify', 'update:stats'])
 
 const classes = ref(storage.getClasses())
-const selectedClassId = ref(classes.value[0]?.id || 'CS101')
+const selectedClassId = ref(classes.value[0]?.id || 'CNTT-K21A')
 
 const videoRef = ref(null)
-const canvasRef = ref(null)
+const overlayCanvasRef = ref(null)
 const isCameraActive = ref(false)
 const autoScanEnabled = ref(true)
 const isScanning = ref(false)
+const isModelReady = ref(false)
 const cameraError = ref(null)
 
 // Current matched student state
 const lastMatched = ref(null)
-const matchStatus = ref(null) // 'success' | 'duplicate' | 'searching'
+const matchStatus = ref(null) // 'success' | 'duplicate' | 'searching' | 'unknown'
 
 // Live Attendance Logs
 const logs = ref([])
 const students = ref([])
 
 function refreshData() {
+  classes.value = storage.getClasses()
   students.value = storage.getStudents()
   logs.value = storage.getAttendanceLogs(selectedClassId.value)
   updateParentStats()
@@ -31,6 +34,12 @@ function refreshData() {
 
 const currentClassStudents = computed(() => {
   return students.value.filter(s => s.classId === selectedClassId.value)
+})
+
+const enrolledClassStudents = computed(() => {
+  return currentClassStudents.value.filter(
+    s => s.embeddingCreated && Array.isArray(s.descriptors) && s.descriptors.length > 0
+  )
 })
 
 const attendanceStats = computed(() => {
@@ -47,7 +56,6 @@ function updateParentStats() {
   })
 }
 
-// Camera controls
 async function startCamera() {
   cameraError.value = null
   try {
@@ -61,11 +69,12 @@ async function startCamera() {
     })
     if (videoRef.value) {
       videoRef.value.srcObject = stream
+      await videoRef.value.play().catch(() => {})
       isCameraActive.value = true
     }
   } catch (err) {
     console.error('Camera error in Scanner:', err)
-    cameraError.value = 'Không thể mở camera iPad. Vui lòng cấp quyền truy cập camera.'
+    cameraError.value = 'Không thể mở camera. Vui lòng cấp quyền truy cập camera thật.'
     isCameraActive.value = false
   }
 }
@@ -80,91 +89,152 @@ function stopCamera() {
   isCameraActive.value = false
 }
 
-// Recognition Process
-let autoScanTimer = null
+function drawScannerOverlay(detections, matchedLabel = '') {
+  const canvas = overlayCanvasRef.value
+  const video = videoRef.value
+  if (!canvas || !video || video.videoWidth === 0) return
 
-function triggerScan() {
-  if (isScanning.value) return
-  isScanning.value = true
-  matchStatus.value = 'searching'
+  const rect = canvas.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return
 
-  // Capture frame if camera active
-  if (isCameraActive.value && videoRef.value && canvasRef.value) {
-    const canvas = canvasRef.value
-    const video = videoRef.value
-    canvas.width = 320
-    canvas.height = 240
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+  if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+    canvas.width = Math.round(rect.width)
+    canvas.height = Math.round(rect.height)
   }
 
-  // Matching logic (Local Mock or API)
-  setTimeout(() => {
-    performMatch()
-    isScanning.value = false
-  }, 450)
+  const ctx = canvas.getContext('2d')
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  if (!detections || detections.length === 0) return
+
+  const vw = video.videoWidth
+  const vh = video.videoHeight
+  const scale = Math.max(canvas.width / vw, canvas.height / vh)
+  const offsetX = (canvas.width - vw * scale) / 2
+  const offsetY = (canvas.height - vh * scale) / 2
+
+  for (const det of detections) {
+    const box = det.scaledBox || det.detection.box
+    const x = canvas.width - (offsetX + (box.x + box.width) * scale)
+    const y = offsetY + box.y * scale
+    const w = box.width * scale
+    const h = box.height * scale
+
+    ctx.strokeStyle = matchedLabel ? '#10b981' : '#38bdf8'
+    ctx.lineWidth = 2
+    ctx.strokeRect(x, y, w, h)
+
+    if (matchedLabel) {
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.85)'
+      ctx.fillRect(x, Math.max(0, y - 24), Math.max(w, 150), 24)
+      ctx.fillStyle = '#04120c'
+      ctx.font = 'bold 12px sans-serif'
+      ctx.fillText(matchedLabel, x + 6, Math.max(16, y - 7))
+    }
+  }
 }
 
-function performMatch(targetStudent = null) {
-  // If target specified (e.g. demo button) or pick random from un-attended
-  const classStudents = currentClassStudents.value
-  if (classStudents.length === 0) {
-    matchStatus.value = null
+let autoScanTimer = null
+
+async function triggerScan(isManual = true) {
+  if (isScanning.value) return
+  if (!isCameraActive.value || !videoRef.value || videoRef.value.readyState < 2) {
+    if (isManual) {
+      emit('notify', { type: 'warning', message: 'Vui lòng bật camera trước khi quét điểm danh!' })
+    }
     return
   }
 
-  let candidate = targetStudent
-  if (!candidate) {
-    // Find students not yet attended
-    const unChecked = classStudents.filter(s => !logs.value.some(l => l.studentId === s.id))
-    if (unChecked.length > 0) {
-      candidate = unChecked[Math.floor(Math.random() * unChecked.length)]
-    } else {
-      // Pick any to demonstrate duplicate detection
-      candidate = classStudents[Math.floor(Math.random() * classStudents.length)]
+  isScanning.value = true
+  matchStatus.value = 'searching'
+
+  try {
+    if (!isModelReady.value) {
+      await faceEngine.loadModels()
+      isModelReady.value = true
     }
-  }
 
-  if (!candidate) return
-
-  const result = storage.recordAttendance({
-    studentId: candidate.id,
-    studentName: candidate.name,
-    classId: candidate.classId,
-    avatar: candidate.avatar
-  })
-
-  lastMatched.value = {
-    ...candidate,
-    confidence: (96 + Math.random() * 3.5).toFixed(1) + '%',
-    timestamp: new Date().toLocaleTimeString('vi-VN'),
-    alreadyMarked: !result.success
-  }
-
-  if (result.success) {
-    matchStatus.value = 'success'
-    sound.playSuccess()
-    emit('notify', { 
-      type: 'success', 
-      message: `[Điểm danh] ${candidate.name} (${candidate.id}) - Có mặt!` 
-    })
-  } else {
-    matchStatus.value = 'duplicate'
-    sound.playWarning()
-    emit('notify', { 
-      type: 'warning', 
-      message: `${candidate.name} đã được điểm danh trước đó.` 
-    })
-  }
-
-  refreshData()
-
-  // Reset match status badge after 3.5s
-  setTimeout(() => {
-    if (matchStatus.value !== 'searching') {
+    const detections = await faceEngine.detectAllWithDescriptors(videoRef.value)
+    if (!detections || detections.length === 0) {
+      drawScannerOverlay([])
       matchStatus.value = null
+      if (isManual) {
+        emit('notify', { type: 'warning', message: 'Chưa phát hiện khuôn mặt nào trước camera!' })
+      }
+      return
     }
-  }, 3500)
+
+    const primary = detections.reduce((best, cur) =>
+      cur.detection.box.area > best.detection.box.area ? cur : best
+    )
+
+    const match = faceEngine.matchDescriptor(primary.descriptor, enrolledClassStudents.value, 0.52)
+
+    if (!match.matched) {
+      drawScannerOverlay(detections, '')
+      matchStatus.value = 'unknown'
+      lastMatched.value = null
+      if (isManual) {
+        sound.playWarning()
+        emit('notify', {
+          type: 'warning',
+          message:
+            enrolledClassStudents.value.length === 0
+              ? `Lớp ${selectedClassId.value} chưa có sinh viên nào đăng ký khuôn mặt thật!`
+              : 'Khuôn mặt không khớp với sinh viên nào đã đăng ký trong lớp này.'
+        })
+      }
+      return
+    }
+
+    const candidate = match.student
+    drawScannerOverlay(detections, `${candidate.name} (${match.confidence})`)
+
+    const result = storage.recordAttendance({
+      studentId: candidate.id,
+      studentName: candidate.name,
+      classId: candidate.classId,
+      avatar: candidate.avatar,
+      confidence: match.confidence,
+      device: 'Live Camera · ResNet-34 128D'
+    })
+
+    lastMatched.value = {
+      ...candidate,
+      confidence: match.confidence,
+      timestamp: new Date().toLocaleTimeString('vi-VN'),
+      alreadyMarked: !result.success
+    }
+
+    if (result.success) {
+      matchStatus.value = 'success'
+      sound.playSuccess()
+      emit('notify', {
+        type: 'success',
+        message: `[Điểm danh] ${candidate.name} (${candidate.id}) - Khớp ${match.confidence}`
+      })
+    } else {
+      matchStatus.value = 'duplicate'
+      if (isManual) {
+        sound.playWarning()
+        emit('notify', {
+          type: 'warning',
+          message: `${candidate.name} đã được điểm danh hôm nay rồi.`
+        })
+      }
+    }
+
+    refreshData()
+  } catch (err) {
+    console.error('Real face scan error:', err)
+    matchStatus.value = null
+  } finally {
+    isScanning.value = false
+    setTimeout(() => {
+      if (matchStatus.value !== 'searching') {
+        matchStatus.value = null
+      }
+    }, 3500)
+  }
 }
 
 function toggleAutoScan() {
@@ -180,14 +250,9 @@ function startAutoScanLoop() {
   stopAutoScanLoop()
   autoScanTimer = setInterval(() => {
     if (isCameraActive.value && autoScanEnabled.value && !isScanning.value) {
-      // Simulates real-time face detection trigger when person is in front
-      // 30% chance per interval to match a student if un-attended students exist
-      const unChecked = currentClassStudents.value.filter(s => !logs.value.some(l => l.studentId === s.id))
-      if (unChecked.length > 0) {
-        triggerScan()
-      }
+      triggerScan(false)
     }
-  }, 3000)
+  }, 2200)
 }
 
 function stopAutoScanLoop() {
@@ -197,13 +262,15 @@ function stopAutoScanLoop() {
   }
 }
 
-function simulateStudentScan(student) {
-  performMatch(student)
-}
-
-onMounted(() => {
+onMounted(async () => {
   refreshData()
-  startCamera()
+  await startCamera()
+  try {
+    await faceEngine.loadModels()
+    isModelReady.value = true
+  } catch {
+    isModelReady.value = false
+  }
   if (autoScanEnabled.value) {
     startAutoScanLoop()
   }
@@ -254,7 +321,7 @@ onBeforeUnmount(() => {
         <button 
           class="btn btn-primary" 
           :disabled="isScanning"
-          @click="triggerScan"
+          @click="triggerScan(true)"
           id="btn-scan-now"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -293,7 +360,11 @@ onBeforeUnmount(() => {
             :class="{ hidden: !isCameraActive }"
           ></video>
 
-          <canvas ref="canvasRef" style="display: none;"></canvas>
+          <canvas
+            v-show="isCameraActive"
+            ref="overlayCanvasRef"
+            style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4;"
+          ></canvas>
 
           <!-- Fallback if camera off -->
           <div v-if="!isCameraActive" class="viewport-placeholder">
@@ -325,9 +396,10 @@ onBeforeUnmount(() => {
             <div class="target-radar-pulse"></div>
             
             <div class="target-tag">
-              <span v-if="matchStatus === 'searching'">Đang phân tích khuôn mặt...</span>
+              <span v-if="matchStatus === 'searching'">Đang phân tích vector 128-D...</span>
               <span v-else-if="matchStatus === 'success'">Khuôn mặt hợp lệ ✓</span>
               <span v-else-if="matchStatus === 'duplicate'">Đã có mặt ⚠</span>
+              <span v-else-if="matchStatus === 'unknown'">Chưa khớp dữ liệu lớp</span>
               <span v-else>Đưa khuôn mặt vào khung quét</span>
             </div>
           </div>
@@ -357,22 +429,14 @@ onBeforeUnmount(() => {
           </transition>
         </div>
 
-        <!-- Quick Interactive Demo Toolbar -->
+        <!-- Real AI Engine & Enrollment Telemetry Footer -->
         <div class="stage-footer">
           <div class="demo-trigger-label">
-            <span>Thử nghiệm nhanh:</span>
-            <small>Bấm để giả lập sinh viên bước vào trước camera</small>
-          </div>
-          <div class="demo-pills">
-            <button 
-              v-for="st in currentClassStudents.slice(0, 4)" 
-              :key="st.id"
-              class="demo-pill-btn"
-              @click="simulateStudentScan(st)"
-            >
-              <img :src="st.avatar" class="pill-avatar" />
-              <span>{{ st.name.split(' ').slice(-1)[0] }}</span>
-            </button>
+            <span>Nhận diện thời gian thực:</span>
+            <small>
+              {{ isModelReady ? 'ResNet-34 128-D đã sẵn sàng' : 'Đang nạp mô hình AI...' }}
+              · Đã có {{ enrolledClassStudents.length }}/{{ currentClassStudents.length }} hồ sơ khuôn mặt trong lớp {{ selectedClassId }}
+            </small>
           </div>
         </div>
       </div>

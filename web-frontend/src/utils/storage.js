@@ -8,74 +8,25 @@ const STORAGE_KEYS = {
   CURRENT_PROFILE: 'facethic_current_profile'
 };
 
-const INITIAL_ACCOUNTS = [
-  {
-    employeeId: 'SX-00001',
-    fullName: 'SpaceX Admin',
-    email: 'admin@spacex.com',
-    role: 'lecturer',
-    password: 'SpaceX@2026',
-    createdAt: '2026-11-01 08:00'
-  }
-];
+const INITIAL_ACCOUNTS = [];
 
 const DEFAULT_CLASSES = [
-  { id: 'CS101', name: 'CS101 - Nhập môn Trí tuệ Nhân tạo', totalStudents: 40 },
-  { id: 'IT202', name: 'IT202 - Lập trình Web Hiện đại', totalStudents: 45 },
-  { id: 'SE301', name: 'SE301 - Công nghệ Phần mềm Chuyên sâu', totalStudents: 38 }
+  { id: 'CNTT-K21A', name: 'CNTT-K21A - Công nghệ Thông tin K21A' },
+  { id: 'CS101', name: 'CS101 - Nhập môn Trí tuệ Nhân tạo' },
+  { id: 'IT202', name: 'IT202 - Lập trình Web Hiện đại' },
+  { id: 'SE301', name: 'SE301 - Công nghệ Phần mềm Chuyên sâu' }
 ];
 
-const INITIAL_STUDENTS = [
-  {
-    id: 'SV202601',
-    name: 'Nguyễn Hoàng Long',
-    classId: 'CS101',
-    email: 'long.nh@facethic.edu.vn',
-    registeredAt: '2026-11-01 08:00',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-    embeddingCreated: true
-  },
-  {
-    id: 'SV202602',
-    name: 'Trần Thị Mai Anh',
-    classId: 'CS101',
-    email: 'maianh.tt@facethic.edu.vn',
-    registeredAt: '2026-11-01 08:15',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=400&q=80',
-    embeddingCreated: true
-  },
-  {
-    id: 'SV202603',
-    name: 'Lê Quốc Tuấn',
-    classId: 'CS101',
-    email: 'tuan.lq@facethic.edu.vn',
-    registeredAt: '2026-11-01 08:30',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    embeddingCreated: true
-  },
-  {
-    id: 'SV202604',
-    name: 'Phạm Minh Đức',
-    classId: 'IT202',
-    email: 'duc.pm@facethic.edu.vn',
-    registeredAt: '2026-11-01 08:45',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-    embeddingCreated: true
-  },
-  {
-    id: 'SV202605',
-    name: 'Võ Thảo Vy',
-    classId: 'IT202',
-    email: 'thaovy.vo@facethic.edu.vn',
-    registeredAt: '2026-11-01 09:00',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80',
-    embeddingCreated: true
-  }
-];
+const INITIAL_STUDENTS = [];
+const LEGACY_MOCK_IDS = new Set(['SV202601', 'SV202602', 'SV202603', 'SV202604', 'SV202605']);
 
 export const storage = {
   getClasses() {
-    return DEFAULT_CLASSES;
+    const students = this.getStudents();
+    return DEFAULT_CLASSES.map(c => ({
+      ...c,
+      totalStudents: students.filter(s => s.classId === c.id).length
+    }));
   },
 
   getStudents() {
@@ -85,9 +36,17 @@ export const storage = {
       return INITIAL_STUDENTS;
     }
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const cleaned = parsed.filter(
+        s => !(LEGACY_MOCK_IDS.has(s.id) && typeof s.avatar === 'string' && s.avatar.includes('images.unsplash.com'))
+      );
+      if (cleaned.length !== parsed.length) {
+        localStorage.setItem(STORAGE_KEYS.STUDENTS, JSON.stringify(cleaned));
+      }
+      return cleaned;
     } catch {
-      return INITIAL_STUDENTS;
+      return [];
     }
   },
 
@@ -147,9 +106,9 @@ export const storage = {
       studentName: record.studentName,
       classId: record.classId,
       timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' + todayStr,
-      confidence: record.confidence || (95 + Math.random() * 4.5).toFixed(1) + '%',
+      confidence: record.confidence || '0%',
       avatar: record.avatar,
-      device: 'iPad Pro (Front Camera)'
+      device: record.device || 'Live Camera (FaceAPI ResNet-34)'
     };
 
     logs.unshift(newRecord);
@@ -165,7 +124,7 @@ export const storage = {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     const defaults = {
       apiUrl: 'http://localhost:8080/api',
-      useMock: true,
+      useMock: false,
       autoScanInterval: 2000,
       confidenceThreshold: 80
     };
@@ -207,7 +166,8 @@ export const storage = {
     }
     try {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) && parsed.length ? parsed : INITIAL_ACCOUNTS;
+      if (!Array.isArray(parsed)) return INITIAL_ACCOUNTS;
+      return parsed.filter(a => a.employeeId !== 'SX-00001' || a.email !== 'admin@spacex.com');
     } catch {
       return INITIAL_ACCOUNTS;
     }
@@ -272,11 +232,12 @@ export const storage = {
     this.saveStudent({
       id: normId,
       name: fullName.trim(),
-      classId: role === 'lecturer' ? 'FACULTY' : 'CS101',
+      classId: role === 'lecturer' ? 'FACULTY' : 'CNTT-K21A',
       email: normEmail,
       avatar: null,
       registeredAt: newAccount.createdAt,
-      embeddingCreated: false
+      embeddingCreated: false,
+      descriptors: []
     });
 
     return { success: true, account: newAccount };

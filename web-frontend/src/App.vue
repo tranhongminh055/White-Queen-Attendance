@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import HeaderNav from './components/HeaderNav.vue'
 import FacEthicLanding from './components/FacEthicLanding.vue'
 import ScannerView from './components/ScannerView.vue'
@@ -10,11 +10,16 @@ import CustomCursor from './components/CustomCursor.vue'
 import CookieBanner from './components/CookieBanner.vue'
 import LoginView from './components/LoginView.vue'
 import RegisterView from './components/RegisterView.vue'
+import StudentPortalIntroView from './components/StudentPortalIntroView.vue'
 import { storage } from './utils/storage'
 import { sound } from './utils/sound'
 
 // Start on 'landing' (The exact facEthic UI from screenshot)
 const currentTab = ref('landing')
+const navHistory = ref(['landing'])
+const historyIndex = ref(0)
+const canGoBack = computed(() => historyIndex.value > 0)
+const canGoForward = computed(() => historyIndex.value < navHistory.value.length - 1)
 const showSettings = ref(false)
 const notifications = ref([])
 const globalStats = ref({ present: 0, total: 0 })
@@ -54,9 +59,9 @@ function handleCookieReject() {
   })
 }
 
-const protectedTabs = ['scanner', 'enrollment', 'dashboard']
+const protectedTabs = ['face-intro', 'scanner', 'enrollment', 'dashboard']
 
-function handleTabChange(tab) {
+function applyTab(tab, pushHistory = true) {
   if (tab !== 'landing' && !cookiesAccepted.value) {
     sound.playWarning()
     triggerCookieAttention()
@@ -64,7 +69,7 @@ function handleTabChange(tab) {
       type: 'warning',
       message: 'Vui lòng nhấn Accept Cookie trước khi chuyển trang!'
     })
-    return
+    return false
   }
 
   if (protectedTabs.includes(tab) && !storage.getCurrentProfile()) {
@@ -73,17 +78,54 @@ function handleTabChange(tab) {
       type: 'warning',
       message: 'Vui lòng đăng ký và đăng nhập tài khoản trước khi đăng ký khuôn mặt hoặc điểm danh!'
     })
-    currentTab.value = 'login'
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-    return
+    tab = 'login'
   }
 
   if (tab === 'settings') {
     showSettings.value = true
-  } else {
-    currentTab.value = tab
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return false
   }
+
+  if (pushHistory && tab !== currentTab.value) {
+    const trimmed = navHistory.value.slice(0, historyIndex.value + 1)
+    trimmed.push(tab)
+    navHistory.value = trimmed
+    historyIndex.value = trimmed.length - 1
+    window.history.pushState({ tab, index: historyIndex.value }, '', `#${tab}`)
+  }
+
+  currentTab.value = tab
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  return true
+}
+
+function handleTabChange(tab) {
+  applyTab(tab, true)
+}
+
+function handleGoBack(fallback = 'landing') {
+  if (canGoBack.value) {
+    window.history.back()
+    return
+  }
+  applyTab(fallback, true)
+}
+
+function handleGoForward() {
+  if (canGoForward.value) {
+    window.history.forward()
+  }
+}
+
+function handlePopState(event) {
+  const hashTab = window.location.hash ? window.location.hash.replace('#', '') : ''
+  const targetTab = event.state?.tab || hashTab || 'landing'
+  if (typeof event.state?.index === 'number') {
+    historyIndex.value = event.state.index
+  } else if (historyIndex.value > 0 && navHistory.value[historyIndex.value - 1] === targetTab) {
+    historyIndex.value--
+  }
+  applyTab(targetTab, false)
 }
 
 function handleStatsUpdate(newStats) {
@@ -103,12 +145,19 @@ function removeNotification(id) {
 }
 
 onMounted(() => {
+  window.history.replaceState({ tab: 'landing', index: 0 }, '', '#landing')
+  window.addEventListener('popstate', handlePopState)
+
   const students = storage.getStudents()
-  const logs = storage.getAttendanceLogs('CS101')
+  const logs = storage.getAttendanceLogs('CNTT-K21A')
   globalStats.value = {
     present: logs.length,
-    total: students.filter(s => s.classId === 'CS101').length
+    total: students.filter(s => s.classId === 'CNTT-K21A').length
   }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('popstate', handlePopState)
 })
 </script>
 
@@ -117,12 +166,16 @@ onMounted(() => {
     <!-- Custom Follower Ring Cursor matching facEthic -->
     <CustomCursor />
 
-    <!-- Show Top Nav on app screens, or custom nav on Landing/Auth/Enrollment -->
+    <!-- Show Top Nav on app screens, or custom nav on Landing/Auth/Intro/Enrollment -->
     <HeaderNav 
-      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'enrollment'"
+      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment'"
       :current-tab="currentTab" 
       :stats="globalStats"
-      @update:tab="handleTabChange" 
+      :can-back="canGoBack"
+      :can-forward="canGoForward"
+      @update:tab="handleTabChange"
+      @back="handleGoBack()"
+      @forward="handleGoForward()"
     />
 
     <!-- Main Content Stage -->
@@ -137,7 +190,8 @@ onMounted(() => {
         <!-- SpaceX Biometric Login Page -->
         <LoginView 
           v-else-if="currentTab === 'login'" 
-          @navigate="handleTabChange" 
+          @navigate="handleTabChange"
+          @back="handleGoBack('landing')"
           @notify="addNotification"
         />
 
@@ -145,6 +199,15 @@ onMounted(() => {
         <RegisterView
           v-else-if="currentTab === 'register'"
           @navigate="handleTabChange"
+          @back="handleGoBack('login')"
+          @notify="addNotification"
+        />
+
+        <!-- Student Face Onboarding Intro Page (before camera enrollment) -->
+        <StudentPortalIntroView
+          v-else-if="currentTab === 'face-intro'"
+          @navigate="handleTabChange"
+          @back="handleGoBack('login')"
           @notify="addNotification"
         />
 
@@ -159,6 +222,7 @@ onMounted(() => {
         <EnrollmentView 
           v-else-if="currentTab === 'enrollment'" 
           @navigate="handleTabChange"
+          @back="handleGoBack('face-intro')"
           @notify="addNotification"
         />
 
@@ -179,7 +243,7 @@ onMounted(() => {
 
     <!-- Cookie Banner (hidden on auth screens unless blocking redirect) -->
     <CookieBanner
-      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'enrollment'"
+      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment'"
       :visible="showCookieBanner"
       :attention="cookieAttention"
       @accept="handleCookieAccept"
