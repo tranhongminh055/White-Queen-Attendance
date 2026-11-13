@@ -1,0 +1,51 @@
+-- SpaceX Biometric Attendance System - PostgreSQL Schema (Neon / Supabase / Render / PostgreSQL 15+)
+
+CREATE TABLE IF NOT EXISTS Accounts (
+    EmployeeId VARCHAR(32) NOT NULL PRIMARY KEY,
+    FullName VARCHAR(120) NOT NULL,
+    Email VARCHAR(160) NOT NULL UNIQUE,
+    Role VARCHAR(32) NOT NULL DEFAULT 'student',
+    ClassId VARCHAR(40) NOT NULL DEFAULT 'CNTT-K21A',
+    PasswordHash VARCHAR(255) NOT NULL,
+    CreatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS StudentProfiles (
+    StudentId VARCHAR(32) NOT NULL PRIMARY KEY REFERENCES Accounts(EmployeeId) ON DELETE CASCADE,
+    FullName VARCHAR(120) NOT NULL,
+    ClassId VARCHAR(40) NOT NULL DEFAULT 'CNTT-K21A',
+    Email VARCHAR(160) NOT NULL UNIQUE,
+    AvatarDataUrl TEXT NULL,
+    EmbeddingCreated SMALLINT NOT NULL DEFAULT 0,
+    RegisteredAt VARCHAR(64) NULL,
+    UpdatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS FaceEmbeddings (
+    Id SERIAL PRIMARY KEY,
+    StudentId VARCHAR(32) NOT NULL REFERENCES StudentProfiles(StudentId) ON DELETE CASCADE,
+    AngleKey VARCHAR(24) NOT NULL,
+    DescriptorJson TEXT NOT NULL,
+    SnapshotDataUrl TEXT NULL,
+    CreatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT UQ_FaceEmbeddings_Student_Angle UNIQUE (StudentId, AngleKey)
+);
+
+CREATE TABLE IF NOT EXISTS AttendanceLogs (
+    Id VARCHAR(48) NOT NULL PRIMARY KEY,
+    StudentId VARCHAR(32) NOT NULL REFERENCES StudentProfiles(StudentId) ON DELETE CASCADE,
+    StudentName VARCHAR(120) NOT NULL,
+    ClassId VARCHAR(40) NOT NULL,
+    Confidence VARCHAR(24) NOT NULL,
+    AvatarDataUrl TEXT NULL,
+    Device VARCHAR(120) NOT NULL,
+    ScannedDate DATE NOT NULL DEFAULT CURRENT_DATE,
+    TimestampText VARCHAR(64) NOT NULL,
+    CreatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT UQ_AttendanceLogs_Daily UNIQUE (StudentId, ClassId, ScannedDate)
+);
+
+CREATE INDEX IF NOT EXISTS IX_StudentProfiles_ClassId ON StudentProfiles (ClassId);
+CREATE INDEX IF NOT EXISTS IX_FaceEmbeddings_StudentId ON FaceEmbeddings (StudentId, Id);
+CREATE INDEX IF NOT EXISTS IX_AttendanceLogs_Class_Created ON AttendanceLogs (ClassId, CreatedAt DESC);
+

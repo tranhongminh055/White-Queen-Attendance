@@ -1,21 +1,41 @@
 import json
 import math
+import os
 import re
+import threading
 import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any
 
-import pyodbc
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from db import SQLSERVER_DB, SQLSERVER_HOST, get_connection, init_database
+from db import (
+    DB_DISPLAY_HOST,
+    DB_DISPLAY_NAME,
+    DB_ENGINE,
+    IntegrityError,
+    get_connection,
+    init_database,
+)
 from security import hash_password, verify_password
 
 EMAIL_REGEX = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 EMPLOYEE_ID_REGEX = re.compile(r"^[A-Za-z]{2,5}-?\d{3,6}$")
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    if origin.strip()
+]
+AUTH_RATE_LIMIT_PER_MIN = max(30, int(os.getenv("AUTH_RATE_LIMIT_PER_MIN", "180")))
+MAX_SNAPSHOT_LEN = 750_000
+
+_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
+_rate_lock = threading.Lock()
 
 DEFAULT_CLASSES = [
     {"id": "CNTT-K21A", "name": "CNTT-K21A - Công nghệ Thông tin K21A"},
@@ -35,17 +55,46 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(
     title="SpaceX Biometric SQL Server API",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials="*" not in ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def auth_rate_limit_middleware(request: Request, call_next):
+    if request.url.path.startswith("/api/auth/") and request.method == "POST":
+        client_ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+            request.client.host if request.client else "unknown"
+        )
+        now = time.monotonic()
+        cutoff = now - 60.0
+        with _rate_lock:
+            bucket = _rate_buckets[client_ip]
+            while bucket and bucket[0] < cutoff:
+                bucket.popleft()
+            if len(bucket) >= AUTH_RATE_LIMIT_PER_MIN:
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Quá nhiều yêu cầu xác thực. Vui lòng thử lại sau 1 phút."},
+                )
+            bucket.append(now)
+    return await call_next(request)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, _exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Lỗi hệ thống nội bộ hoặc kết nối cơ sở dữ liệu. Vui lòng thử lại."},
+    )
 
 
 class RegisterRequest(BaseModel):
@@ -135,14 +184,14 @@ def normalize_descriptor_map(
     return normalized
 
 
-def find_account_conflicts(cur: pyodbc.Cursor, norm_id: str, norm_email: str) -> dict[str, str]:
+def find_account_conflicts(cur: Any, norm_id: str, norm_email: str) -> dict[str, str]:
     conflicts: dict[str, str] = {}
     if norm_id:
         cur.execute(
             """
-            SELECT TOP 1 EmployeeId FROM dbo.Accounts WHERE UPPER(EmployeeId) = ?
+            SELECT EmployeeId FROM Accounts WHERE UPPER(EmployeeId) = ?
             UNION ALL
-            SELECT TOP 1 StudentId FROM dbo.StudentProfiles WHERE UPPER(StudentId) = ?
+            SELECT StudentId FROM StudentProfiles WHERE UPPER(StudentId) = ?
             """,
             (norm_id, norm_id),
         )
@@ -152,9 +201,9 @@ def find_account_conflicts(cur: pyodbc.Cursor, norm_id: str, norm_email: str) ->
     if norm_email:
         cur.execute(
             """
-            SELECT TOP 1 Email FROM dbo.Accounts WHERE LOWER(Email) = ?
+            SELECT Email FROM Accounts WHERE LOWER(Email) = ?
             UNION ALL
-            SELECT TOP 1 Email FROM dbo.StudentProfiles WHERE LOWER(Email) = ?
+            SELECT Email FROM StudentProfiles WHERE LOWER(Email) = ?
             """,
             (norm_email, norm_email),
         )
@@ -164,14 +213,18 @@ def find_account_conflicts(cur: pyodbc.Cursor, norm_id: str, norm_email: str) ->
     return conflicts
 
 
-def build_student_payloads(cur: pyodbc.Cursor, student_id: str | None = None) -> list[dict[str, Any]]:
+def build_student_payloads(
+    cur: Any,
+    student_id: str | None = None,
+    include_snapshots: bool = False,
+) -> list[dict[str, Any]]:
     if student_id:
         cur.execute(
             """
             SELECT s.StudentId, s.FullName, s.ClassId, s.Email, s.AvatarDataUrl,
                    s.EmbeddingCreated, s.RegisteredAt, a.Role
-            FROM dbo.StudentProfiles s
-            LEFT JOIN dbo.Accounts a ON a.EmployeeId = s.StudentId
+            FROM StudentProfiles s
+            LEFT JOIN Accounts a ON a.EmployeeId = s.StudentId
             WHERE UPPER(s.StudentId) = ?
             ORDER BY s.UpdatedAt DESC
             """,
@@ -182,8 +235,8 @@ def build_student_payloads(cur: pyodbc.Cursor, student_id: str | None = None) ->
             """
             SELECT s.StudentId, s.FullName, s.ClassId, s.Email, s.AvatarDataUrl,
                    s.EmbeddingCreated, s.RegisteredAt, a.Role
-            FROM dbo.StudentProfiles s
-            LEFT JOIN dbo.Accounts a ON a.EmployeeId = s.StudentId
+            FROM StudentProfiles s
+            LEFT JOIN Accounts a ON a.EmployeeId = s.StudentId
             ORDER BY s.UpdatedAt DESC
             """
         )
@@ -191,11 +244,12 @@ def build_student_payloads(cur: pyodbc.Cursor, student_id: str | None = None) ->
     if not student_rows:
         return []
 
+    snap_col = "SnapshotDataUrl" if include_snapshots else "NULL"
     if student_id:
         cur.execute(
-            """
-            SELECT StudentId, AngleKey, DescriptorJson, SnapshotDataUrl
-            FROM dbo.FaceEmbeddings
+            f"""
+            SELECT StudentId, AngleKey, DescriptorJson, {snap_col}
+            FROM FaceEmbeddings
             WHERE UPPER(StudentId) = ?
             ORDER BY Id ASC
             """,
@@ -203,9 +257,9 @@ def build_student_payloads(cur: pyodbc.Cursor, student_id: str | None = None) ->
         )
     else:
         cur.execute(
-            """
-            SELECT StudentId, AngleKey, DescriptorJson, SnapshotDataUrl
-            FROM dbo.FaceEmbeddings
+            f"""
+            SELECT StudentId, AngleKey, DescriptorJson, {snap_col}
+            FROM FaceEmbeddings
             ORDER BY Id ASC
             """
         )
@@ -254,17 +308,18 @@ def health_check():
         cur.execute(
             """
             SELECT
-                (SELECT COUNT(*) FROM dbo.Accounts) AS AccountCount,
-                (SELECT COUNT(*) FROM dbo.StudentProfiles) AS StudentCount,
-                (SELECT COUNT(*) FROM dbo.FaceEmbeddings) AS FaceEmbeddingCount,
-                (SELECT COUNT(*) FROM dbo.AttendanceLogs) AS AttendanceCount
+                (SELECT COUNT(*) FROM Accounts) AS AccountCount,
+                (SELECT COUNT(*) FROM StudentProfiles) AS StudentCount,
+                (SELECT COUNT(*) FROM FaceEmbeddings) AS FaceEmbeddingCount,
+                (SELECT COUNT(*) FROM AttendanceLogs) AS AttendanceCount
             """
         )
         row = cur.fetchone()
         return {
             "status": "ok",
-            "server": SQLSERVER_HOST,
-            "database": SQLSERVER_DB,
+            "engine": DB_ENGINE,
+            "server": DB_DISPLAY_HOST,
+            "database": DB_DISPLAY_NAME,
             "counts": {
                 "accounts": row[0],
                 "students": row[1],
@@ -339,14 +394,14 @@ def register_account(payload: RegisterRequest):
 
         cur.execute(
             """
-            INSERT INTO dbo.Accounts (EmployeeId, FullName, Email, Role, ClassId, PasswordHash)
+            INSERT INTO Accounts (EmployeeId, FullName, Email, Role, ClassId, PasswordHash)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (norm_id, full_name, norm_email, role, class_id, pw_hash),
         )
         cur.execute(
             """
-            INSERT INTO dbo.StudentProfiles (StudentId, FullName, ClassId, Email, AvatarDataUrl, EmbeddingCreated, RegisteredAt)
+            INSERT INTO StudentProfiles (StudentId, FullName, ClassId, Email, AvatarDataUrl, EmbeddingCreated, RegisteredAt)
             VALUES (?, ?, ?, ?, NULL, 0, ?)
             """,
             (norm_id, full_name, class_id, norm_email, registered_at),
@@ -363,7 +418,7 @@ def register_account(payload: RegisterRequest):
                 "createdAt": registered_at,
             },
         }
-    except pyodbc.IntegrityError:
+    except IntegrityError:
         conn.rollback()
         conflicts = find_account_conflicts(cur, norm_id, norm_email)
         msg = (
@@ -394,9 +449,9 @@ def verify_session(employee_id: str):
             """
             SELECT a.EmployeeId, a.FullName, a.Email, a.Role, a.ClassId,
                    s.AvatarDataUrl, s.EmbeddingCreated,
-                   (SELECT COUNT(*) FROM dbo.FaceEmbeddings f WHERE f.StudentId = a.EmployeeId) AS FaceCount
-            FROM dbo.Accounts a
-            LEFT JOIN dbo.StudentProfiles s ON s.StudentId = a.EmployeeId
+                   (SELECT COUNT(*) FROM FaceEmbeddings f WHERE f.StudentId = a.EmployeeId) AS FaceCount
+            FROM Accounts a
+            LEFT JOIN StudentProfiles s ON s.StudentId = a.EmployeeId
             WHERE UPPER(a.EmployeeId) = ?
             """,
             (norm_id,),
@@ -438,9 +493,9 @@ def login_account(payload: LoginRequest):
             """
             SELECT a.EmployeeId, a.FullName, a.Email, a.Role, a.ClassId, a.PasswordHash,
                    s.AvatarDataUrl, s.EmbeddingCreated,
-                   (SELECT COUNT(*) FROM dbo.FaceEmbeddings f WHERE f.StudentId = a.EmployeeId) AS FaceCount
-            FROM dbo.Accounts a
-            LEFT JOIN dbo.StudentProfiles s ON s.StudentId = a.EmployeeId
+                   (SELECT COUNT(*) FROM FaceEmbeddings f WHERE f.StudentId = a.EmployeeId) AS FaceCount
+            FROM Accounts a
+            LEFT JOIN StudentProfiles s ON s.StudentId = a.EmployeeId
             WHERE LOWER(a.Email) = ? OR UPPER(a.EmployeeId) = ?
             """,
             (query.lower(), query.upper()),
@@ -489,9 +544,9 @@ def face_login(payload: FaceLoginRequest):
         cur.execute(
             """
             SELECT f.StudentId, f.DescriptorJson, s.FullName, s.ClassId, s.Email, s.AvatarDataUrl, a.Role
-            FROM dbo.FaceEmbeddings f
-            INNER JOIN dbo.StudentProfiles s ON s.StudentId = f.StudentId
-            LEFT JOIN dbo.Accounts a ON a.EmployeeId = f.StudentId
+            FROM FaceEmbeddings f
+            INNER JOIN StudentProfiles s ON s.StudentId = f.StudentId
+            LEFT JOIN Accounts a ON a.EmployeeId = f.StudentId
             """
         )
         rows = cur.fetchall()
@@ -544,7 +599,7 @@ def get_classes():
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT ClassId, COUNT(*) FROM dbo.StudentProfiles GROUP BY ClassId")
+        cur.execute("SELECT ClassId, COUNT(*) FROM StudentProfiles GROUP BY ClassId")
         counts = {row[0]: row[1] for row in cur.fetchall()}
         return [
             {**cls, "totalStudents": counts.get(cls["id"], 0)}
@@ -555,11 +610,11 @@ def get_classes():
 
 
 @app.get("/api/students")
-def list_students():
+def list_students(includeSnapshots: bool = Query(default=False)):
     conn = get_connection()
     try:
         cur = conn.cursor()
-        return build_student_payloads(cur)
+        return build_student_payloads(cur, include_snapshots=includeSnapshots)
     finally:
         conn.close()
 
@@ -569,7 +624,7 @@ def get_student(student_id: str):
     conn = get_connection()
     try:
         cur = conn.cursor()
-        rows = build_student_payloads(cur, student_id)
+        rows = build_student_payloads(cur, student_id, include_snapshots=True)
         if not rows:
             raise HTTPException(status_code=404, detail="Không tìm thấy hồ sơ sinh viên.")
         return rows[0]
@@ -582,6 +637,11 @@ def enroll_student_face(payload: EnrollFaceRequest):
     student_id = payload.id.strip().upper()
     desc_map = normalize_descriptor_map(payload.descriptors)
     snapshots = payload.angleSnapshots or {}
+    if payload.avatar and len(payload.avatar) > MAX_SNAPSHOT_LEN:
+        raise HTTPException(status_code=413, detail="Ảnh đại diện vượt quá dung lượng cho phép.")
+    for angle_key, snap in snapshots.items():
+        if snap and len(snap) > MAX_SNAPSHOT_LEN:
+            raise HTTPException(status_code=413, detail=f"Ảnh góc '{angle_key}' vượt quá dung lượng cho phép.")
     avatar = payload.avatar or snapshots.get("straight") or next(iter(snapshots.values()), None)
     registered_at = payload.registeredAt or datetime.now().strftime("%d/%m/%Y, %H:%M:%S")
 
@@ -589,7 +649,7 @@ def enroll_student_face(payload: EnrollFaceRequest):
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT StudentId, FullName, ClassId, Email FROM dbo.StudentProfiles WHERE UPPER(StudentId) = ?",
+            "SELECT StudentId, FullName, ClassId, Email FROM StudentProfiles WHERE UPPER(StudentId) = ?",
             (student_id,),
         )
         existing = cur.fetchone()
@@ -605,24 +665,24 @@ def enroll_student_face(payload: EnrollFaceRequest):
 
         cur.execute(
             """
-            UPDATE dbo.StudentProfiles
+            UPDATE StudentProfiles
             SET FullName = ?,
                 ClassId = ?,
                 Email = ?,
                 AvatarDataUrl = COALESCE(?, AvatarDataUrl),
                 EmbeddingCreated = 1,
                 RegisteredAt = ?,
-                UpdatedAt = SYSUTCDATETIME()
+                UpdatedAt = CURRENT_TIMESTAMP
             WHERE UPPER(StudentId) = ?
             """,
             (full_name, class_id, email, avatar, registered_at, student_id),
         )
 
-        cur.execute("DELETE FROM dbo.FaceEmbeddings WHERE UPPER(StudentId) = ?", (student_id,))
+        cur.execute("DELETE FROM FaceEmbeddings WHERE UPPER(StudentId) = ?", (student_id,))
         for angle_key, vec in desc_map.items():
             cur.execute(
                 """
-                INSERT INTO dbo.FaceEmbeddings (StudentId, AngleKey, DescriptorJson, SnapshotDataUrl)
+                INSERT INTO FaceEmbeddings (StudentId, AngleKey, DescriptorJson, SnapshotDataUrl)
                 VALUES (?, ?, ?, ?)
                 """,
                 (
@@ -649,7 +709,7 @@ def delete_student(student_id: str):
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM dbo.Accounts WHERE UPPER(EmployeeId) = ?", (norm_id,))
+        cur.execute("DELETE FROM Accounts WHERE UPPER(EmployeeId) = ?", (norm_id,))
         conn.commit()
         return {"success": True, "students": build_student_payloads(cur)}
     except Exception:
@@ -668,7 +728,7 @@ def list_attendance(classId: str | None = Query(default=None)):
             cur.execute(
                 """
                 SELECT Id, StudentId, StudentName, ClassId, TimestampText, Confidence, AvatarDataUrl, Device
-                FROM dbo.AttendanceLogs
+                FROM AttendanceLogs
                 WHERE ClassId = ?
                 ORDER BY CreatedAt DESC
                 """,
@@ -678,7 +738,7 @@ def list_attendance(classId: str | None = Query(default=None)):
             cur.execute(
                 """
                 SELECT Id, StudentId, StudentName, ClassId, TimestampText, Confidence, AvatarDataUrl, Device
-                FROM dbo.AttendanceLogs
+                FROM AttendanceLogs
                 ORDER BY CreatedAt DESC
                 """
             )
@@ -714,7 +774,7 @@ def record_attendance(payload: AttendanceRequest):
         cur.execute(
             """
             SELECT Id, StudentId, StudentName, ClassId, TimestampText, Confidence, AvatarDataUrl, Device
-            FROM dbo.AttendanceLogs
+            FROM AttendanceLogs
             WHERE UPPER(StudentId) = ? AND ClassId = ? AND ScannedDate = ?
             """,
             (student_id, payload.classId, today),
@@ -738,7 +798,7 @@ def record_attendance(payload: AttendanceRequest):
 
         cur.execute(
             """
-            INSERT INTO dbo.AttendanceLogs
+            INSERT INTO AttendanceLogs
                 (Id, StudentId, StudentName, ClassId, Confidence, AvatarDataUrl, Device, ScannedDate, TimestampText)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
@@ -781,7 +841,7 @@ def clear_attendance():
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("DELETE FROM dbo.AttendanceLogs")
+        cur.execute("DELETE FROM AttendanceLogs")
         conn.commit()
         return {"success": True}
     except Exception:
@@ -811,22 +871,22 @@ def migrate_legacy_data(payload: LegacyMigrateRequest):
             if not emp_id or not email or not full_name or not raw_pw:
                 continue
 
-            cur.execute("SELECT 1 FROM dbo.Accounts WHERE UPPER(EmployeeId) = ? OR LOWER(Email) = ?", (emp_id, email))
+            cur.execute("SELECT 1 FROM Accounts WHERE UPPER(EmployeeId) = ? OR LOWER(Email) = ?", (emp_id, email))
             if not cur.fetchone():
                 cur.execute(
                     """
-                    INSERT INTO dbo.Accounts (EmployeeId, FullName, Email, Role, ClassId, PasswordHash)
+                    INSERT INTO Accounts (EmployeeId, FullName, Email, Role, ClassId, PasswordHash)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (emp_id, full_name, email, role, class_id, hash_password(raw_pw)),
                 )
                 migrated["accounts"] += 1
 
-            cur.execute("SELECT 1 FROM dbo.StudentProfiles WHERE UPPER(StudentId) = ?", (emp_id,))
+            cur.execute("SELECT 1 FROM StudentProfiles WHERE UPPER(StudentId) = ?", (emp_id,))
             if not cur.fetchone():
                 cur.execute(
                     """
-                    INSERT INTO dbo.StudentProfiles (StudentId, FullName, ClassId, Email, AvatarDataUrl, EmbeddingCreated, RegisteredAt)
+                    INSERT INTO StudentProfiles (StudentId, FullName, ClassId, Email, AvatarDataUrl, EmbeddingCreated, RegisteredAt)
                     VALUES (?, ?, ?, ?, NULL, 0, ?)
                     """,
                     (emp_id, full_name, class_id, email, created_at),
@@ -836,7 +896,7 @@ def migrate_legacy_data(payload: LegacyMigrateRequest):
             sid = str(stu.get("id") or "").strip().upper()
             if not sid:
                 continue
-            cur.execute("SELECT StudentId FROM dbo.StudentProfiles WHERE UPPER(StudentId) = ?", (sid,))
+            cur.execute("SELECT StudentId FROM StudentProfiles WHERE UPPER(StudentId) = ?", (sid,))
             if not cur.fetchone():
                 continue
 
@@ -852,12 +912,12 @@ def migrate_legacy_data(payload: LegacyMigrateRequest):
 
             cur.execute(
                 """
-                UPDATE dbo.StudentProfiles
+                UPDATE StudentProfiles
                 SET ClassId = ?,
                     AvatarDataUrl = COALESCE(?, AvatarDataUrl),
                     EmbeddingCreated = CASE WHEN ? = 1 THEN 1 ELSE EmbeddingCreated END,
                     RegisteredAt = COALESCE(?, RegisteredAt),
-                    UpdatedAt = SYSUTCDATETIME()
+                    UpdatedAt = CURRENT_TIMESTAMP
                 WHERE UPPER(StudentId) = ?
                 """,
                 (class_id, avatar, 1 if has_emb else 0, reg_at, sid),
@@ -865,7 +925,7 @@ def migrate_legacy_data(payload: LegacyMigrateRequest):
             migrated["students"] += 1
 
             if has_emb:
-                cur.execute("SELECT COUNT(*) FROM dbo.FaceEmbeddings WHERE UPPER(StudentId) = ?", (sid,))
+                cur.execute("SELECT COUNT(*) FROM FaceEmbeddings WHERE UPPER(StudentId) = ?", (sid,))
                 if (cur.fetchone()[0] or 0) == 0:
                     items = (
                         list(descriptors.items())
@@ -880,7 +940,7 @@ def migrate_legacy_data(payload: LegacyMigrateRequest):
                             continue
                         cur.execute(
                             """
-                            INSERT INTO dbo.FaceEmbeddings (StudentId, AngleKey, DescriptorJson, SnapshotDataUrl)
+                            INSERT INTO FaceEmbeddings (StudentId, AngleKey, DescriptorJson, SnapshotDataUrl)
                             VALUES (?, ?, ?, ?)
                             """,
                             (sid, angle_key, json.dumps([float(x) for x in vec]), avatar if angle_key == "straight" else None),

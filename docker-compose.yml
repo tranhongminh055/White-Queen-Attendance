@@ -1,0 +1,96 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: spacex-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "${MSSQL_PID:-Standard}"
+      MSSQL_SA_PASSWORD: "${SQLSERVER_PASSWORD:-ChangeMe_StrongSqlPass2026!}"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - spacex_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: spacex-backend
+    restart: unless-stopped
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      SQLSERVER_DRIVER: "ODBC Driver 18 for SQL Server"
+      SQLSERVER_HOST: "sqlserver,1433"
+      SQLSERVER_DB: "${SQLSERVER_DB:-SpaceXBiometricDB}"
+      SQLSERVER_USER: "${SQLSERVER_USER:-sa}"
+      SQLSERVER_PASSWORD: "${SQLSERVER_PASSWORD:-ChangeMe_StrongSqlPass2026!}"
+      DB_POOL_SIZE: "${DB_POOL_SIZE:-16}"
+      DB_CONNECT_TIMEOUT: "${DB_CONNECT_TIMEOUT:-10}"
+      AUTH_RATE_LIMIT_PER_MIN: "${AUTH_RATE_LIMIT_PER_MIN:-180}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-https://localhost}"
+    networks:
+      - spacex_net
+
+  frontend:
+    build:
+      context: ./web-frontend
+      dockerfile: Dockerfile
+    container_name: spacex-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - spacex_net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: spacex-edge-https
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN_NAME: "${DOMAIN_NAME:-localhost}"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - spacex_net
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: spacex-cloudflare-tunnel
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    command: tunnel --no-autoupdate --url http://frontend:80
+    networks:
+      - spacex_net
+
+volumes:
+  sqlserver_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  spacex_net:
+    driver: bridge
+

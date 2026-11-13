@@ -77,3 +77,16 @@ BEGIN
 END
 GO
 
+-- Performance Indexes for High-Concurrency Lookups
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_StudentProfiles_ClassId' AND object_id = OBJECT_ID(N'dbo.StudentProfiles'))
+    CREATE NONCLUSTERED INDEX IX_StudentProfiles_ClassId ON dbo.StudentProfiles (ClassId) INCLUDE (FullName, Email, EmbeddingCreated);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_FaceEmbeddings_StudentId' AND object_id = OBJECT_ID(N'dbo.FaceEmbeddings'))
+    CREATE NONCLUSTERED INDEX IX_FaceEmbeddings_StudentId ON dbo.FaceEmbeddings (StudentId, Id);
+GO
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_AttendanceLogs_Class_Created' AND object_id = OBJECT_ID(N'dbo.AttendanceLogs'))
+    CREATE NONCLUSTERED INDEX IX_AttendanceLogs_Class_Created ON dbo.AttendanceLogs (ClassId, CreatedAt DESC);
+GO
+

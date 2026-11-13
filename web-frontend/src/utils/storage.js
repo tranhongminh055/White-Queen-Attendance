@@ -22,25 +22,55 @@ function readJsonArray(key) {
   }
 }
 
+function normalizeApiBase(raw) {
+  const trimmed = (raw || '').trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  if (trimmed === '/api' || trimmed.endsWith('/api')) return trimmed
+  if (/^https?:\/\//i.test(trimmed)) return `${trimmed}/api`
+  return trimmed
+}
+
 function getApiBase() {
   const settings = storage.getSettings()
-  const configured = (settings.apiUrl || '').trim().replace(/\/+$/, '')
-  if (!configured || configured === 'http://localhost:8000/api' || configured === 'http://localhost:8080/api') {
-    return '/api'
+  const configured = normalizeApiBase(settings.apiUrl || '')
+  if (
+    configured &&
+    configured !== 'http://localhost:8000/api' &&
+    configured !== 'http://localhost:8080/api'
+  ) {
+    return configured
   }
-  return configured
+  const envUrl = normalizeApiBase(import.meta.env?.VITE_API_URL || '')
+  return envUrl || '/api'
 }
+
+const COLD_START_STATUSES = new Set([502, 503, 504])
 
 async function rawFetch(path, options = {}) {
   const base = getApiBase()
   const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
-  const res = await fetch(url, {
+  const fetchOptions = {
     headers: {
       'Content-Type': 'application/json',
       ...(options.headers || {})
     },
     ...options
-  })
+  }
+
+  let res
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      res = await fetch(url, fetchOptions)
+      if (!COLD_START_STATUSES.has(res.status) || attempt === 1 || options.signal?.aborted) {
+        break
+      }
+    } catch (err) {
+      if (attempt === 1 || options.signal?.aborted) {
+        throw err
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+  }
 
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {

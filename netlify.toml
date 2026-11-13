@@ -1,0 +1,32 @@
+[build]
+  base = "web-frontend"
+  command = "npm run build"
+  publish = "dist"
+
+# Optional same-origin API proxy (only needed if you do NOT set VITE_API_URL)
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://your-render-backend.onrender.com/api/:splat"
+#   status = 200
+#   force = true
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/mediapipe/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+

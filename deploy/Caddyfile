@@ -1,0 +1,16 @@
+# Replace {$DOMAIN_NAME} with your real domain in .env (e.g., face.yourdomain.com)
+# Caddy automatically obtains and renews Let's Encrypt TLS certificates for WebRTC Camera HTTPS.
+{$DOMAIN_NAME:localhost} {
+    encode zstd gzip
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Permissions-Policy "camera=(self)"
+        -Server
+    }
+
+    reverse_proxy frontend:80
+}
+
