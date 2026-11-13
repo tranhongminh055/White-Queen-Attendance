@@ -1,156 +1,142 @@
-# 🚀 SpaceX - Biometric Face Attendance & AI Vision System
+# 🚀 SpaceX - Biometric Face Registration & Attendance System
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Vue-3.x-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white" alt="Vue 3" />
-  <img src="https://img.shields.io/badge/Vite-5.x-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
-  <img src="https://img.shields.io/badge/Architecture-3--Tier-FFE600?style=for-the-badge&logo=spacex&logoColor=black" alt="3-Tier Architecture" />
-  <img src="https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?style=for-the-badge&logo=spring-boot&logoColor=white" alt="Spring Boot" />
-  <img src="https://img.shields.io/badge/FastAPI-Python%20AI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Vue-3.5-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white" alt="Vue 3" />
+  <img src="https://img.shields.io/badge/Vite-8.3-646CFF?style=for-the-badge&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/MediaPipe-468_Landmarks-009688?style=for-the-badge&logo=google&logoColor=white" alt="MediaPipe" />
+  <img src="https://img.shields.io/badge/Face--API-128D_Descriptor-FFE600?style=for-the-badge&logoColor=black" alt="Face-API" />
 </p>
 
 ---
 
 ## 📌 Giới Thiệu Dự Án (Overview)
 
-**SpaceX Biometric Attendance System** (Dự án White Queen) là giải pháp quản lý chuyên cần và điểm danh sinh viên tự động thế hệ mới ứng dụng công nghệ **AI Nhận diện khuôn mặt (Face Recognition)**. Hệ thống lấy cảm hứng từ nền tảng **facEthic** và được định hình theo phong cách công nghệ vũ trụ **SpaceX**: hiện đại, tối giản và độ chính xác cực cao.
+**SpaceX Biometric System** (Dự án **White Queen**) là ứng dụng web đăng ký khuôn mặt và điểm danh sinh viên bằng **AI Sinh trắc học thời gian thực ngay trên trình duyệt** (WebRTC Camera + MediaPipe FaceLandmarker + `@vladmandic/face-api`).
 
-Sinh viên chỉ cần đứng trước camera iPad hoặc thiết bị di động, hệ thống AI sẽ phát hiện khuôn mặt, so khớp vector đặc trưng 512 chiều trong **0.3 giây** và ghi nhận chuyên cần ngay lập tức.
+Toàn bộ luồng xác thực, quét 5 góc khuôn mặt, trích xuất vector đặc trưng `128-D` và lưu trữ hồ sơ đều vận hành **100% bằng camera thật và suy luận AI thật** — **không dùng dữ liệu mẫu giả lập (mock data)**.
 
 ---
 
-## 🏛️ Kiến Trúc 3 Tầng (3-Tier Architecture)
+## 🧭 Luồng Hoạt Động Chính (User Flow)
 
 ```mermaid
-graph TD
-    Client["📱 Web & iPad Client (Vue 3 + Vite)<br/>- Live WebRTC Scanner<br/>- Audio Feedback (Web Audio)<br/>- Responsive Glassmorphism UI"]
-    
-    Backend["☕ Core Backend (Java Spring Boot)<br/>- Authentication & JWT<br/>- Business Logic & Chuyên cần<br/>- Database (MySQL / PostgreSQL)"]
-    
-    AIService["🐍 AI Vision Service (Python FastAPI)<br/>- ArcFace / InsightFace Model<br/>- 512D Embeddings Extraction<br/>- Anti-Spoofing Liveness Detection"]
-
-    Client -->|1. Stream Camera / Gửi Ảnh| AIService
-    AIService -->|2. Trả về Vector 512D / Student ID| Client
-    Client -->|3. Ghi nhận Chuyên cần| Backend
-    Backend -->|4. Lưu & Thống kê Chuyên cần| Client
+flowchart LR
+    A["🏠 Landing Page<br/>(Cookie Consent)"] --> B["🔐 Đăng Nhập<br/>(LoginView)"]
+    B -->|Chưa có tài khoản| C["📝 Đăng Ký Tài Khoản<br/>(RegisterView + Validation)"]
+    C --> B
+    B -->|Xác thực thành công| D["🪪 Cổng Sinh Viên<br/>(StudentPortalIntroView)"]
+    D -->|Bấm Đăng ký gương mặt| E["📷 Quét 5 Góc Khuôn Mặt<br/>(EnrollmentView · 468 Landmarks)"]
+    E -->|Lưu 5 vector 128-D| D
+    D -->|Điểm danh| F["🎯 Máy Quét Điểm Danh<br/>(ScannerView)"]
+    F --> G["📊 Báo Cáo & CSV<br/>(DashboardView)"]
 ```
+
+- Điều hướng sử dụng **Browser History API** (`pushState` / `popstate`) đồng bộ hash `#tab` cùng nút `←` / `→` / `Quay lại` ở header và từng màn hình.
+- Các màn hình bảo vệ (`face-intro`, `enrollment`, `scanner`, `dashboard`) yêu cầu đã **Accept Cookie** và **đăng nhập tài khoản hợp lệ** trước khi truy cập.
 
 ---
 
-## ✨ Tính Năng Nổi Bật (Key Features)
+## ✨ Tính Năng Đã Hoàn Thiện
 
-### 1. 🏠 Landing Page Tối Tân (SpaceX Hero)
-- Thiết kế nền đen công nghệ (`#050608`) với hiệu ứng hạt sáng vũ trụ (*particle sparks*).
-- Typography tiêu đề vàng `#FFE600` nổi bật (*Daily Student Record Management System*).
-- **Watermark SpaceX khổng lồ** cùng vệt quỹ đạo tên lửa bay xuyên qua chữ `X`.
-- **Con trỏ chuột tùy biến (Custom Follower Cursor):** Vòng tròn outline lướt mượt mà theo trỏ chuột người dùng.
-- **Banner Cookie Consent:** Quản lý quyền riêng tư với nút Reject và Accept viền vàng.
+### 1. 🏠 Landing Page (`FacEthicLanding.vue` & `CookieBanner.vue`)
+- Giao diện nền tối SpaceX kết hợp hiệu ứng hạt nền, `CustomCursor` theo trỏ chuột và `CookieBanner` kiểm soát quyền điều hướng.
 
-### 2. 🔐 Màn Hình Đăng Nhập 3D Papercut (`LoginView`)
-- Nền tranh cắt giấy 3D nghệ thuật đa tầng (*Papercut Clouds*) hoàng hôn rực rỡ kết hợp bóng hologram AI.
-- Watermark thương hiệu SpaceX tích hợp tinh tế ở nền trời.
-- Bộ chọn 3 loại tài khoản trực quan:
-  - **Face Registration** (Đăng ký khuôn mặt mới).
-  - **Educator Account** (Tài khoản giáo viên / quản trị).
-  - **Student Account** (Tài khoản học sinh - *Coming Soon*).
+### 2. 📝 Đăng Ký & 🔐 Đăng Nhập Thực (`RegisterView.vue`, `LoginView.vue`, `validation.js`)
+- Kiểm tra chặt chẽ từng trường nhập liệu: Email, Họ tên, Mã sinh viên/nhân viên (`SX-00123`, `SV202601`...), độ mạnh mật khẩu (tối thiểu 8 ký tự gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt).
+- Chống đăng ký trùng Email hoặc Mã sinh viên/nhân viên đã tồn tại trong `storage.js`.
+- Hỗ trợ đăng nhập bằng mật khẩu hoặc **Đăng nhập bằng khuôn mặt thật** (so khớp Euclidean distance với vector `128-D` đã đăng ký).
 
-### 3. 📷 Máy Quét Điểm Danh iPad (`ScannerView`)
-- Truy cập trực tiếp Camera WebRTC với độ trễ siêu thấp.
-- Khung nhận diện góc vuông sci-fi và tia laser HUD quét dọc mượt mà.
-- **Âm thanh sinh động (Web Audio API Synthesizer):** Âm báo *chime* thành công (ngân vang 2 nốt C5-G5), âm *buzzer* cảnh báo khi chưa đăng ký.
-- Badge bảo mật độc quyền: `SPACEX SECURE BIO-SCAN | v2.4`.
-- Bộ lọc chọn Lớp học, Môn học linh hoạt.
+### 3. 🪪 Cổng Giới Thiệu Sinh Viên (`StudentPortalIntroView.vue`)
+- Hiển thị thẻ thông tin sinh viên đang đăng nhập, trạng thái sinh trắc học (`CHƯA ĐĂNG KÝ` / `ĐÃ ĐĂNG KÝ`), hướng dẫn 3 bước và nút **Đăng ký gương mặt**.
 
-### 4. 👤 Đăng Ký Sinh Viên & Face Enrollment (`EnrollmentView`)
-- Chụp ảnh trực tiếp từ webcam với hướng dẫn giữ khuôn mặt trong khung oval.
-- Trích xuất và mô phỏng vector embedding 512 chiều của mô hình ArcFace.
-- Nhập thông tin Mã sinh viên, Họ tên, Lớp, Email để lưu trữ vào hệ thống.
+### 4. 📷 Đăng Ký Khuôn Mặt 5 Góc Thật (`EnrollmentView.vue` & `faceEngine.js`)
+- **AI Engine lai 2 tầng chạy cục bộ** (tài nguyên đặt trong `public/mediapipe/` và `public/models/`, không phụ thuộc CDN ngoài):
+  - **Google MediaPipe `FaceLandmarker`** (`468 điểm mốc`, ưu tiên `GPU` delegate và tự động dự phòng `CPU`) dò khuôn mặt, vẽ lưới wireframe `TESSELATION` + `CONTOURS` theo thời gian thực và tính góc đầu (`yaw`, `pitch`).
+  - **`@vladmandic/face-api` (`faceRecognitionNet`)** trích xuất **vector đặc trưng `128-D`** trực tiếp từ khung mặt vừa xác nhận qua `extractFromLastAnalysis()`.
+- **Tối ưu camera laptop mờ / sương / ngược sáng (`captureRawFrame`, `buildEnhancedPass` & `detectWithBacklitFallback`)**:
+  - Đo histogram trong lõi trung tâm (`x: 32%..68%`, `y: 18%..74%`) để tránh ánh sáng cửa sổ rìa khung ảnh làm tối khuôn mặt.
+  - Kéo giãn tương phản theo phân vị + nâng sáng vùng tối bằng bảng tra `Uint8Array(256)` LUT + bộ lọc làm nét 3×3 unsharp mask, kèm lượt phục hồi ngược sáng tăng cường nếu lượt 1 chưa bắt được mặt.
+- Quét tuần tự **5 góc thật**: `Nhìn thẳng` → `Quay trái` → `Quay phải` → `Ngẩng lên` → `Cúi xuống` và chụp snapshot khuôn mặt thật lưu vào hồ sơ sinh viên.
 
-### 5. 📊 Báo Cáo & Xuất Dữ Liệu (`DashboardView`)
-- Thống kê tỷ lệ có mặt theo thời gian thực (Present, Absent, Attendance Rate %).
-- Bảng nhật ký điểm danh có ảnh đại diện, lớp, trạng thái và thời gian chính xác tới từng giây.
-- **Bộ lọc thông minh:** Lọc theo trạng thái, tìm kiếm theo tên / MSSV.
-- **Xuất file CSV:** Tải báo cáo chuyên cần về máy tính chỉ với 1 click.
-
-### 6. ⚙️ Cấu Hình Kết Nối API (`SettingsModal`)
-- Cho phép chuyển đổi linh hoạt giữa chế độ **Giả lập (Local Mock)** và **Kết nối Backend thật (Live 3-Tier API)**.
-- Tùy chỉnh URL Java Spring Boot (`http://localhost:8080/api`) và Python AI (`http://localhost:8000`).
+### 5. 🎯 Máy Quét Điểm Danh & Báo Cáo (`ScannerView.vue`, `DashboardView.vue`)
+- Nhận diện khuôn mặt thời gian thực qua WebRTC, so khớp khoảng cách Euclidean (`matchDescriptor`) với danh sách vector `128-D` đã đăng ký.
+- Phát âm thanh phản hồi bằng Web Audio API (`sound.js`), thống kê chuyên cần theo lớp học và hỗ trợ xuất file CSV.
+- Hỗ trợ cấu hình chế độ LocalStorage hoặc tích hợp API Backend qua `SettingsModal.vue`.
 
 ---
 
 ## 📂 Cấu Trúc Thư Mục (Project Structure)
 
 ```text
-web-frontend/
-├── index.html                      # File HTML chính, cấu hình Font Plus Jakarta Sans & Favicon
-├── vite.config.js                  # Cấu hình Vite Build Tool
-├── package.json                    # Khai báo Dependencies & Scripts
-├── public/                         # Tài nguyên tĩnh
-└── src/
-    ├── main.js                     # Điểm khởi chạy ứng dụng Vue 3
-    ├── style.css                   # Hệ thống Design System (Tokens, Glassmorphism, Animations)
-    ├── App.vue                     # Component gốc điều hướng màn hình & thông báo toàn cục
-    ├── assets/                     # Hình ảnh, biểu tượng vector
-    ├── components/
-    │   ├── CustomCursor.vue        # Con trỏ chuột vòng tròn lướt mượt theo cử động
-    │   ├── CookieBanner.vue        # Banner thông báo Cookie đáy màn hình
-    │   ├── SpaceXLogo.vue          # Logo vector SpaceX chuẩn với biểu tượng quỹ đạo
-    │   ├── FacEthicLanding.vue     # Trang chủ giới thiệu giải pháp (Dark SpaceX Theme)
-    │   ├── LoginView.vue           # Màn hình đăng nhập mây 3D Papercut nghệ thuật
-    │   ├── ScannerView.vue         # Máy quét điểm danh thời gian thực camera iPad
-    │   ├── EnrollmentView.vue      # Chụp và đăng ký dữ liệu khuôn mặt sinh viên
-    │   ├── DashboardView.vue       # Bảng điều khiển quản lý và xuất CSV báo cáo
-    │   ├── HeaderNav.vue           # Thanh điều hướng trên cùng các trang quản trị
-    │   └── SettingsModal.vue       # Cửa sổ cấu hình kết nối API 3-tier
-    └── utils/
-        ├── sound.js                # Bộ phát âm thanh tự tạo bằng Web Audio API
-        └── storage.js              # Quản lý LocalStorage & Service API Adapter
+White Queen/
+├── README.md
+└── web-frontend/
+    ├── index.html                                  # HTML gốc ứng dụng
+    ├── package.json                                # Dependencies & Vite scripts
+    ├── vite.config.js                              # Cấu hình Vite
+    ├── public/
+    │   ├── mediapipe/
+    │   │   ├── face_landmarker.task                # Model MediaPipe FaceLandmarker
+    │   │   └── wasm/                               # MediaPipe Vision WASM runtime
+    │   └── models/                                 # Trọng số @vladmandic/face-api (faceRecognitionNet...)
+    └── src/
+        ├── main.js                                 # Điểm khởi chạy Vue 3
+        ├── style.css                               # Hệ thống giao diện & animations
+        ├── App.vue                                 # Điều phối tab, History API, Auth/Cookie guards
+        ├── assets/                                 # Hình ảnh & tài nguyên giao diện
+        ├── components/
+        │   ├── CookieBanner.vue                    # Banner chấp nhận/từ chối Cookie
+        │   ├── CustomCursor.vue                    # Con trỏ chuột tùy biến
+        │   ├── DashboardView.vue                   # Thống kê điểm danh & xuất CSV
+        │   ├── EnrollmentView.vue                  # Quét camera thật 5 góc & trích xuất 128-D
+        │   ├── FacEthicLanding.vue                 # Trang chủ SpaceX Biometric
+        │   ├── HeaderNav.vue                       # Header điều hướng & nút Back/Forward
+        │   ├── LoginView.vue                       # Đăng nhập tài khoản / khuôn mặt thật
+        │   ├── RegisterView.vue                    # Đăng ký tài khoản với validate đầy đủ
+        │   ├── ScannerView.vue                     # Máy quét điểm danh thời gian thực
+        │   ├── SettingsModal.vue                   # Cấu hình kết nối API Backend (tuỳ chọn)
+        │   ├── SpaceXLogo.vue                      # Logo SpaceX
+        │   ├── SpaceXWatermark.vue                 # Watermark nền SpaceX
+        │   └── StudentPortalIntroView.vue          # Cổng sinh viên trước khi quét mặt
+        └── utils/
+            ├── faceEngine.js                       # MediaPipe 468pt + 128-D + chống ngược sáng LUT
+            ├── sound.js                            # Bộ phát âm thanh Web Audio API
+            ├── storage.js                          # Quản lý tài khoản, hồ sơ sinh viên & điểm danh
+            └── validation.js                       # Validate form đăng ký & đăng nhập
 ```
 
 ---
 
-## 🛠️ Hướng Dẫn Cài Đặt & Chạy Dự Án (Getting Started)
+## 🛠️ Hướng Dẫn Cài Đặt & Chạy Dự Án
 
-### Yêu Cầu Môi Trường:
+### Yêu Cầu Môi Trường
 - **Node.js**: v18.0.0 trở lên
-- **Trình duyệt**: Chrome, Edge, Safari hoặc Firefox có hỗ trợ WebRTC Camera
+- **Trình duyệt**: Chrome / Edge hỗ trợ WebRTC Camera (`localhost` hoặc `HTTPS`)
 
-### 1. Di chuyển vào thư mục frontend:
+### Các Bước Chạy
 ```bash
+# 1. Di chuyển vào thư mục frontend
 cd web-frontend
-```
 
-### 2. Cài đặt các gói phụ thuộc:
-```bash
+# 2. Cài đặt dependencies
 npm install
-```
 
-### 3. Chạy môi trường phát triển (Development Server):
-```bash
+# 3. Chạy môi trường phát triển (Development Server)
 npm run dev
 ```
-> Trình duyệt sẽ mở ứng dụng tại: `http://localhost:5173/` hoặc `http://localhost:5174/`
+> Mở trình duyệt tại địa chỉ Vite hiển thị (mặc định `http://localhost:5173/`).
 
-### 4. Đóng gói bản Production:
 ```bash
+# 4. Đóng gói bản Production
 npm run build
+
+# 5. Xem trước bản build Production
+npm run preview
 ```
 
 ---
 
-## 🌐 Tích Hợp API Backend (Integration Guide)
-
-Hệ thống được thiết kế sẵn sàng cho việc tích hợp với Backend:
-
-| Dịch vụ | Công nghệ | Cổng mặc định | Chức năng chính |
-| :--- | :--- | :--- | :--- |
-| **Frontend** | Vue 3 + Vite | `5173` / `5174` | Giao diện tương tác, quét camera, hiển thị số liệu |
-| **Core Backend** | Spring Boot | `8080` | Quản lý sinh viên, lưu vết chuyên cần, xác thực JWT |
-| **AI Vision** | FastAPI (Python) | `8000` | ArcFace trích xuất 512D embedding, anti-spoofing |
-
----
-
-## 👨‍💻 Tác Giả & Bản Quyền
+## 👨‍💻 Thông Tin Dự Án
 
 - **Dự án**: White Queen Attendance System
 - **Repository**: [GitHub tranhongminh055/White-Queen-Attendance](https://github.com/tranhongminh055/White-Queen-Attendance)
-- **Thiết kế & Bản quyền**: © 2026 SpaceX Smart Biometric Vision System. All Rights Reserved.
