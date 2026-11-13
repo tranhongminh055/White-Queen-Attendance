@@ -1,0 +1,16 @@
+name: Keep Render & Supabase Alive
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping Render health endpoint
+        run: |
+          curl -fsS --max-time 60 --retry 2 --retry-delay 5 \
+            "https://white-queen-attendance.onrender.com/api/health"
