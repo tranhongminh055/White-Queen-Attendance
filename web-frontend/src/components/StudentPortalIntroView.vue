@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import SpaceXLogo from './SpaceXLogo.vue'
 import { storage } from '../utils/storage'
 import { sound } from '../utils/sound'
@@ -7,25 +7,21 @@ import { sound } from '../utils/sound'
 const emit = defineEmits(['navigate', 'back', 'notify'])
 
 const currentProfile = storage.getCurrentProfile()
-
-const studentRecord = computed(() => {
-  if (!currentProfile) return null
-  return storage.getStudents().find(
-    s => (s.id || '').toUpperCase() === (currentProfile.id || '').toUpperCase()
-  )
-})
+const studentRecord = ref(null)
 
 const profile = computed(() => ({
   id: currentProfile?.id || '',
-  fullName: currentProfile?.fullName || '',
+  fullName: studentRecord.value?.name || currentProfile?.fullName || '',
   classId: studentRecord.value?.classId || currentProfile?.classId || 'CNTT-K21A',
-  email: currentProfile?.email || '',
-  role: currentProfile?.role || 'student',
-  avatar: studentRecord.value?.avatar || null,
+  email: studentRecord.value?.email || currentProfile?.email || '',
+  role: studentRecord.value?.role || currentProfile?.role || 'student',
+  avatar: studentRecord.value?.avatar || currentProfile?.avatar || null,
   isEnrolled: Boolean(
-    studentRecord.value?.embeddingCreated &&
-      Array.isArray(studentRecord.value?.descriptors) &&
-      studentRecord.value.descriptors.length > 0
+    studentRecord.value
+      ? studentRecord.value.embeddingCreated &&
+          Array.isArray(studentRecord.value.descriptors) &&
+          studentRecord.value.descriptors.length > 0
+      : currentProfile?.embeddingCreated
   )
 }))
 
@@ -50,14 +46,33 @@ function handleLogout() {
   emit('navigate', 'login')
 }
 
-onMounted(() => {
-  if (!currentProfile) {
+onMounted(async () => {
+  const verified = await storage.verifySessionFromDb()
+  if (!verified) {
     sound.playWarning()
     emit('notify', {
       type: 'warning',
-      message: 'Vui lòng đăng nhập tài khoản trước!'
+      message: 'Tài khoản chưa tồn tại trong SQL Server! Vui lòng đăng nhập hoặc đăng ký trước.'
     })
     emit('navigate', 'login')
+    return
+  }
+
+  try {
+    const fresh = await storage.getStudentById(verified.id)
+    if (fresh) {
+      studentRecord.value = fresh
+      storage.setCurrentProfile({
+        ...verified,
+        fullName: fresh.name,
+        classId: fresh.classId,
+        email: fresh.email,
+        avatar: fresh.avatar,
+        embeddingCreated: Boolean(fresh.embeddingCreated)
+      })
+    }
+  } catch {
+    // Keep session profile if backend temporarily unreachable
   }
 })
 </script>

@@ -43,21 +43,25 @@ function selectRole(val) {
   sound.playBeep()
 }
 
-function validateField(field) {
+async function validateField(field) {
   if (field === 'fullName') {
     errors.fullName = validateFullName(fullName.value)
   } else if (field === 'employeeId') {
     const formatError = validateEmployeeId(employeeId.value)
-    errors.employeeId =
-      formatError ||
-      storage.findRegisteredConflicts({ employeeId: employeeId.value }).employeeId ||
-      ''
+    if (formatError) {
+      errors.employeeId = formatError
+    } else {
+      const conflicts = await storage.findRegisteredConflicts({ employeeId: employeeId.value })
+      errors.employeeId = conflicts.employeeId || ''
+    }
   } else if (field === 'email') {
     const formatError = validateEmail(email.value)
-    errors.email =
-      formatError ||
-      storage.findRegisteredConflicts({ email: email.value }).email ||
-      ''
+    if (formatError) {
+      errors.email = formatError
+    } else {
+      const conflicts = await storage.findRegisteredConflicts({ email: email.value })
+      errors.email = conflicts.email || ''
+    }
   } else if (field === 'password') {
     errors.password = validateRegistrationPassword(password.value)
     if (confirmPassword.value) {
@@ -80,13 +84,15 @@ function validateField(field) {
   }
 }
 
-function validateAll() {
-  validateField('fullName')
-  validateField('employeeId')
-  validateField('email')
-  validateField('password')
-  validateField('confirmPassword')
-  validateField('consents')
+async function validateAll() {
+  await Promise.all([
+    validateField('fullName'),
+    validateField('employeeId'),
+    validateField('email'),
+    validateField('password'),
+    validateField('confirmPassword'),
+    validateField('consents')
+  ])
   return !(
     errors.fullName ||
     errors.employeeId ||
@@ -97,8 +103,8 @@ function validateAll() {
   )
 }
 
-function handleRegisterSubmit() {
-  if (!validateAll()) {
+async function handleRegisterSubmit() {
+  if (!(await validateAll())) {
     const firstError =
       errors.fullName ||
       errors.employeeId ||
@@ -114,8 +120,8 @@ function handleRegisterSubmit() {
   isSubmitting.value = true
   sound.playBeep()
 
-  setTimeout(() => {
-    const res = storage.registerAccount({
+  try {
+    const res = await storage.registerAccount({
       fullName: fullName.value,
       employeeId: employeeId.value,
       email: email.value,
@@ -129,20 +135,20 @@ function handleRegisterSubmit() {
       } else if (res.field && res.field in errors) {
         errors[res.field] = res.message
       }
-      isSubmitting.value = false
       sound.playWarning()
       emit('notify', { type: 'error', message: res.message })
       return
     }
 
-    isSubmitting.value = false
     sound.playSuccess()
     emit('notify', {
       type: 'success',
-      message: `Đăng ký tài khoản ${res.account.fullName} thành công! Vui lòng đăng nhập để tiếp tục đăng ký khuôn mặt.`
+      message: `Đăng ký tài khoản ${res.account.fullName} vào SQL Server thành công! Vui lòng đăng nhập để đăng ký khuôn mặt.`
     })
     emit('navigate', 'login')
-  }, 500)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 

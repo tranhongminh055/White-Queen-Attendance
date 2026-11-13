@@ -410,52 +410,70 @@ function resetAllScans() {
   activeIndex.value = 0
 }
 
-function completeEnrollment() {
+async function completeEnrollment() {
   const descriptorList = Object.values(capturedDescriptors.value)
   if (!allCompleted.value || descriptorList.length < 5 || isSaving.value) return
 
   isSaving.value = true
   sound.playBeep()
 
-  const updatedStudent = {
-    id: profile.id.toUpperCase(),
-    name: profile.fullName,
-    classId: profile.classId,
-    email: profile.email,
-    avatar: avatarPreview.value,
-    registeredAt: new Date().toLocaleString('vi-VN'),
-    embeddingCreated: true,
-    descriptors: descriptorList
-  }
-
-  storage.saveStudent(updatedStudent)
-  const activeProfile = storage.getCurrentProfile()
-  if (activeProfile) {
-    storage.setCurrentProfile({
-      ...activeProfile,
-      embeddingCreated: true
+  try {
+    const savedStudent = await storage.saveStudent({
+      id: profile.id.toUpperCase(),
+      name: profile.fullName,
+      classId: profile.classId,
+      email: profile.email,
+      avatar: avatarPreview.value,
+      registeredAt: new Date().toLocaleString('vi-VN'),
+      embeddingCreated: true,
+      descriptors: capturedDescriptors.value,
+      angleSnapshots: capturedFrames.value
     })
-  }
 
-  isSaving.value = false
-  sound.playSuccess()
-  emit('notify', {
-    type: 'success',
-    message: `Đã lưu dữ liệu sinh trắc học thật (${descriptorList.length} góc · 128-D) cho ${updatedStudent.name}!`
-  })
-  emit('navigate', 'face-intro')
+    const activeProfile = storage.getCurrentProfile()
+    if (activeProfile) {
+      storage.setCurrentProfile({
+        ...activeProfile,
+        avatar: savedStudent?.avatar || avatarPreview.value,
+        embeddingCreated: true
+      })
+    }
+
+    sound.playSuccess()
+    emit('notify', {
+      type: 'success',
+      message: `Đã lưu dữ liệu sinh trắc học 5 góc vào SQL Server cho ${savedStudent?.name || profile.fullName}!`
+    })
+    emit('navigate', 'face-intro')
+  } catch (err) {
+    sound.playWarning()
+    emit('notify', {
+      type: 'error',
+      message: `Không thể lưu khuôn mặt vào SQL Server: ${err.message}`
+    })
+  } finally {
+    isSaving.value = false
+  }
 }
 
 onMounted(async () => {
-  if (!savedProfile) {
+  const verifiedProfile = await storage.verifySessionFromDb()
+  if (!verifiedProfile) {
     sound.playWarning()
     emit('notify', {
       type: 'warning',
-      message: 'Chưa đăng nhập tài khoản! Vui lòng đăng nhập trước khi đăng ký khuôn mặt.'
+      message: 'Tài khoản chưa tồn tại trong SQL Server! Vui lòng đăng ký hoặc đăng nhập lại.'
     })
     emit('navigate', 'login')
     return
   }
+  Object.assign(profile, {
+    id: verifiedProfile.id || '',
+    fullName: verifiedProfile.fullName || '',
+    classId: verifiedProfile.classId || 'CNTT-K21A',
+    email: verifiedProfile.email || '',
+    role: verifiedProfile.role || 'student'
+  })
 
   startCamera()
   try {

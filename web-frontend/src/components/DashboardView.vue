@@ -1,22 +1,36 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { storage } from '../utils/storage'
 import { sound } from '../utils/sound'
 
 const emit = defineEmits(['notify'])
 
-const classes = ref(storage.getClasses())
+const classes = ref([])
 const selectedClass = ref('ALL')
 const searchQuery = ref('')
 const activeSubTab = ref('logs') // 'logs' | 'students'
 
-const students = ref(storage.getStudents())
-const logs = ref(storage.getAttendanceLogs())
+const students = ref([])
+const logs = ref([])
 
-function reload() {
-  students.value = storage.getStudents()
-  logs.value = storage.getAttendanceLogs()
+async function reload() {
+  try {
+    const [clsList, stuList, logList] = await Promise.all([
+      storage.getClasses(),
+      storage.getStudents(),
+      storage.getAttendanceLogs()
+    ])
+    classes.value = clsList
+    students.value = stuList
+    logs.value = logList
+  } catch (err) {
+    emit('notify', { type: 'error', message: `Không thể tải dữ liệu SQL Server: ${err.message}` })
+  }
 }
+
+onMounted(() => {
+  reload()
+})
 
 // Filtered Logs
 const filteredLogs = computed(() => {
@@ -51,21 +65,29 @@ const stats = computed(() => {
 })
 
 // Actions
-function handleDeleteStudent(id, name) {
-  if (confirm(`Bạn có chắc muốn xóa dữ liệu khuôn mặt của ${name} (${id})?`)) {
-    storage.deleteStudent(id)
-    reload()
-    sound.playBeep()
-    emit('notify', { type: 'success', message: `Đã xóa hồ sơ sinh viên ${name}` })
+async function handleDeleteStudent(id, name) {
+  if (confirm(`Bạn có chắc muốn xóa dữ liệu khuôn mặt & tài khoản của ${name} (${id}) khỏi SQL Server?`)) {
+    try {
+      await storage.deleteStudent(id)
+      await reload()
+      sound.playBeep()
+      emit('notify', { type: 'success', message: `Đã xóa hồ sơ sinh viên ${name} khỏi SQL Server` })
+    } catch (err) {
+      emit('notify', { type: 'error', message: `Lỗi xóa sinh viên: ${err.message}` })
+    }
   }
 }
 
-function handleClearLogs() {
-  if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử điểm danh hôm nay để quét lại từ đầu?')) {
-    storage.clearAttendanceLogs()
-    reload()
-    sound.playBeep()
-    emit('notify', { type: 'success', message: 'Đã xóa dữ liệu điểm danh.' })
+async function handleClearLogs() {
+  if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử điểm danh trong SQL Server?')) {
+    try {
+      await storage.clearAttendanceLogs()
+      await reload()
+      sound.playBeep()
+      emit('notify', { type: 'success', message: 'Đã xóa dữ liệu điểm danh trong SQL Server.' })
+    } catch (err) {
+      emit('notify', { type: 'error', message: `Lỗi xóa lịch sử: ${err.message}` })
+    }
   }
 }
 

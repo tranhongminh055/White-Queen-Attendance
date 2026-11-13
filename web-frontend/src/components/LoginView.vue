@@ -29,7 +29,7 @@ function validateField(field) {
   }
 }
 
-function handleLogin() {
+async function handleLogin() {
   validateField('username')
   validateField('password')
 
@@ -45,33 +45,25 @@ function handleLogin() {
   isLoading.value = true
   sound.playBeep()
 
-  setTimeout(() => {
-    const result = storage.authenticate(username.value, password.value)
-    isLoading.value = false
+  try {
+    const result = await storage.authenticate(username.value, password.value)
 
     if (!result.success) {
-      errors[result.field] = result.message
+      errors[result.field || 'username'] = result.message
       sound.playWarning()
       emit('notify', { type: 'error', message: result.message })
       return
     }
 
-    const students = storage.getStudents()
-    const studentRecord = students.find(
-      s => (s.id || '').toUpperCase() === result.account.employeeId.toUpperCase()
-    )
-    const hasFaceEnrolled = Boolean(
-      studentRecord?.embeddingCreated &&
-        Array.isArray(studentRecord?.descriptors) &&
-        studentRecord.descriptors.length > 0
-    )
+    const hasFaceEnrolled = Boolean(result.account.embeddingCreated)
 
     storage.setCurrentProfile({
       id: result.account.employeeId,
       fullName: result.account.fullName,
       email: result.account.email,
       role: result.account.role,
-      classId: studentRecord?.classId || (result.account.role === 'lecturer' ? 'FACULTY' : 'CNTT-K21A'),
+      classId: result.account.classId || (result.account.role === 'lecturer' ? 'FACULTY' : 'CNTT-K21A'),
+      avatar: result.account.avatar || null,
       embeddingCreated: hasFaceEnrolled
     })
 
@@ -92,7 +84,9 @@ function handleLogin() {
       message: `Đăng nhập thành công! Chào mừng ${result.account.fullName} trở lại hệ thống SpaceX.`
     })
     emit('navigate', 'face-intro')
-  }, 450)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 const showFaceModal = ref(false)
@@ -115,15 +109,21 @@ function closeFaceLoginModal() {
 
 async function handleFaceLogin() {
   sound.playBeep()
-  const enrolled = storage
-    .getStudents()
-    .filter(s => s.embeddingCreated && Array.isArray(s.descriptors) && s.descriptors.length > 0)
-
-  if (enrolled.length === 0) {
+  try {
+    const health = await storage.checkHealth()
+    if (!health?.counts?.faceEmbeddings) {
+      sound.playWarning()
+      emit('notify', {
+        type: 'warning',
+        message: 'Chưa có tài khoản nào đăng ký khuôn mặt trong SQL Server! Vui lòng đăng nhập bằng mật khẩu trước.'
+      })
+      return
+    }
+  } catch (err) {
     sound.playWarning()
     emit('notify', {
-      type: 'warning',
-      message: 'Chưa có tài khoản nào đăng ký khuôn mặt thật! Vui lòng đăng nhập bằng mật khẩu trước.'
+      type: 'error',
+      message: `Không thể kết nối SQL Server API: ${err.message}`
     })
     return
   }
@@ -146,41 +146,29 @@ async function handleFaceLogin() {
       await faceVideoRef.value.play().catch(() => {})
     }
     await faceEngine.loadModels()
-    faceModalStatus.value = 'Hãy nhìn thẳng vào camera để xác thực...'
-    runFaceLoginCheck(enrolled)
+    faceModalStatus.value = 'Hãy nhìn thẳng vào camera để xác thực với SQL Server...'
+    runFaceLoginCheck()
   } catch {
     faceModalError.value = 'Không thể truy cập camera để đăng nhập bằng khuôn mặt.'
   }
 }
 
-async function runFaceLoginCheck(enrolled) {
+async function runFaceLoginCheck() {
   if (!showFaceModal.value || !faceVideoRef.value) return
   try {
     if (faceVideoRef.value.readyState >= 2) {
       const extracted = await faceEngine.extractDescriptor(faceVideoRef.value)
       if (extracted?.descriptor) {
-        const match = faceEngine.matchDescriptor(extracted.descriptor, enrolled, 0.5)
-        if (match.matched) {
-          const matchedStudent = match.student
-          const account = storage
-            .getAccounts()
-            .find(a => a.employeeId.toUpperCase() === matchedStudent.id.toUpperCase())
-
-          storage.setCurrentProfile({
-            id: matchedStudent.id,
-            fullName: account?.fullName || matchedStudent.name,
-            email: account?.email || matchedStudent.email,
-            role: account?.role || 'student',
-            classId: matchedStudent.classId || 'CNTT-K21A',
-            embeddingCreated: true
-          })
+        const match = await storage.authenticateWithFace(extracted.descriptor, 0.5)
+        if (match.matched && match.account) {
+          storage.setCurrentProfile(match.account)
 
           closeFaceLoginModal()
           sound.playSuccess()
           emit('login-success')
           emit('notify', {
             type: 'success',
-            message: `Xác thực khuôn mặt thành công (${match.confidence})! Xin chào ${matchedStudent.name}.`
+            message: `Xác thực khuôn mặt SQL Server thành công (${match.confidence})! Xin chào ${match.account.fullName}.`
           })
           emit('navigate', 'face-intro')
           return
@@ -195,7 +183,7 @@ async function runFaceLoginCheck(enrolled) {
   }
 
   if (showFaceModal.value) {
-    faceLoginTimer = setTimeout(() => runFaceLoginCheck(enrolled), 300)
+    faceLoginTimer = setTimeout(() => runFaceLoginCheck(), 300)
   }
 }
 

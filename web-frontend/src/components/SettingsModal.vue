@@ -27,8 +27,8 @@ function save() {
             </svg>
           </div>
           <div>
-            <h2 class="modal-title">Cấu Hình Kết Nối Hệ Thống</h2>
-            <p class="modal-sub">Thiết lập kết nối với Java Spring Boot & Python AI</p>
+            <h2 class="modal-title">Cấu Hình Kết Nối SQL Server</h2>
+            <p class="modal-sub">Đồng bộ dữ liệu tài khoản & sinh trắc học 128-D với FastAPI + SQL Server</p>
           </div>
         </div>
         <button class="close-btn" @click="emit('close')">✕</button>
@@ -39,48 +39,27 @@ function save() {
         <div class="arch-box">
           <div class="arch-node active">
             <span class="arch-label">Frontend</span>
-            <strong>Vue 3 (Vite)</strong>
+            <strong>Vue 3 + MediaPipe</strong>
           </div>
           <div class="arch-arrow">➔</div>
-          <div class="arch-node" :class="{ active: !settings.useMock }">
-            <span class="arch-label">Backend</span>
-            <strong>Java Spring Boot</strong>
-          </div>
-          <div class="arch-arrow">➔</div>
-          <div class="arch-node" :class="{ active: !settings.useMock }">
-            <span class="arch-label">AI Engine</span>
+          <div class="arch-node active">
+            <span class="arch-label">API Server</span>
             <strong>Python FastAPI</strong>
+          </div>
+          <div class="arch-arrow">➔</div>
+          <div class="arch-node active">
+            <span class="arch-label">Database</span>
+            <strong>SQL Server 2025</strong>
           </div>
         </div>
 
         <div class="input-group">
-          <label class="input-label">Chế độ vận hành</label>
-          <div class="radio-cards">
-            <label class="radio-card" :class="{ checked: !settings.useMock }">
-              <input type="radio" v-model="settings.useMock" :value="false" name="mode" />
-              <div>
-                <strong>AI Sinh trắc học Trực tiếp trên Trình duyệt (WebRTC + ResNet-34 128-D)</strong>
-                <small>Phân tích 68 điểm khuôn mặt thật và lưu vector nhận diện 128 chiều cục bộ.</small>
-              </div>
-            </label>
-
-            <label class="radio-card" :class="{ checked: settings.useMock }">
-              <input type="radio" v-model="settings.useMock" :value="true" name="mode" />
-              <div>
-                <strong>Kết nối Backend Mở rộng (Spring Boot + Python)</strong>
-                <small>Gửi request đồng bộ tới REST API máy chủ ngoài.</small>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        <div class="input-group" v-if="!settings.useMock">
-          <label class="input-label" for="api-url">Địa chỉ API Java Spring Boot</label>
+          <label class="input-label" for="api-url">Địa chỉ Backend API (FastAPI + SQL Server)</label>
           <input 
             id="api-url" 
             type="text" 
             v-model="settings.apiUrl" 
-            placeholder="http://localhost:8080/api" 
+            placeholder="http://localhost:8000/api" 
             class="input-field" 
           />
         </div>

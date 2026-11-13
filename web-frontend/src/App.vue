@@ -144,15 +144,32 @@ function removeNotification(id) {
   notifications.value = notifications.value.filter(n => n.id !== id)
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.history.replaceState({ tab: 'landing', index: 0 }, '', '#landing')
   window.addEventListener('popstate', handlePopState)
 
-  const students = storage.getStudents()
-  const logs = storage.getAttendanceLogs('CNTT-K21A')
-  globalStats.value = {
-    present: logs.length,
-    total: students.filter(s => s.classId === 'CNTT-K21A').length
+  try {
+    const mig = await storage.migrateLegacyData()
+    if (mig?.migrated && (mig.migrated.accounts > 0 || mig.migrated.embeddings > 0)) {
+      addNotification({
+        type: 'success',
+        message: `Đã đồng bộ ${mig.migrated.accounts} tài khoản và ${mig.migrated.embeddings} góc khuôn mặt vào SQL Server!`
+      })
+    }
+    const verifiedProfile = await storage.verifySessionFromDb()
+    if (!verifiedProfile && protectedTabs.includes(currentTab.value)) {
+      applyTab('login', false)
+    }
+    const [students, logs] = await Promise.all([
+      storage.getStudents(),
+      storage.getAttendanceLogs('CNTT-K21A')
+    ])
+    globalStats.value = {
+      present: logs.length,
+      total: students.filter(s => s.classId === 'CNTT-K21A').length
+    }
+  } catch {
+    globalStats.value = { present: 0, total: 0 }
   }
 })
 

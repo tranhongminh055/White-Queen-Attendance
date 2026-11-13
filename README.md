@@ -63,6 +63,13 @@ flowchart LR
 - Phát âm thanh phản hồi bằng Web Audio API (`sound.js`), thống kê chuyên cần theo lớp học và hỗ trợ xuất file CSV.
 - Hỗ trợ cấu hình chế độ LocalStorage hoặc tích hợp API Backend qua `SettingsModal.vue`.
 
+## 🗄️ Cơ Sở Dữ Liệu SQL Server (`SpaceXBiometricDB` trên `localhost\SQLEXPRESS25`)
+
+- `dbo.Accounts`: Tài khoản đăng nhập/đăng ký (`EmployeeId`, `FullName`, `Email`, `Role`, `ClassId`, `PasswordHash` PBKDF2-HMAC-SHA256).
+- `dbo.StudentProfiles`: Hồ sơ sinh viên/giảng viên (`StudentId`, `FullName`, `ClassId`, `Email`, `AvatarDataUrl`, `EmbeddingCreated`, `RegisteredAt`).
+- `dbo.FaceEmbeddings`: Dữ liệu 5 góc khuôn mặt thật (`AngleKey`: `straight`, `left`, `right`, `up`, `down`, vector `DescriptorJson` 128 chiều, ảnh `SnapshotDataUrl`).
+- `dbo.AttendanceLogs`: Nhật ký điểm danh thật theo ngày (`UQ_AttendanceLogs_Daily`).
+
 ---
 
 ## 📂 Cấu Trúc Thư Mục (Project Structure)
@@ -70,10 +77,16 @@ flowchart LR
 ```text
 White Queen/
 ├── README.md
+├── backend/                                        # FastAPI + pyodbc REST API -> SQL Server
+│   ├── db.py                                       # Kết nối SQL Server & khởi tạo CSDL tự động
+│   ├── main.py                                     # Endpoints Auth, Face Enrollment 5 góc, Attendance
+│   ├── requirements.txt                            # Python dependencies
+│   ├── schema.sql                                  # Script SQL Server tạo DB & 4 bảng
+│   └── security.py                                 # Băm & kiểm tra mật khẩu PBKDF2-HMAC-SHA256
 └── web-frontend/
     ├── index.html                                  # HTML gốc ứng dụng
     ├── package.json                                # Dependencies & Vite scripts
-    ├── vite.config.js                              # Cấu hình Vite
+    ├── vite.config.js                              # Cấu hình Vite + Proxy /api -> :8000
     ├── public/
     │   ├── mediapipe/
     │   │   ├── face_landmarker.task                # Model MediaPipe FaceLandmarker
@@ -94,14 +107,14 @@ White Queen/
         │   ├── LoginView.vue                       # Đăng nhập tài khoản / khuôn mặt thật
         │   ├── RegisterView.vue                    # Đăng ký tài khoản với validate đầy đủ
         │   ├── ScannerView.vue                     # Máy quét điểm danh thời gian thực
-        │   ├── SettingsModal.vue                   # Cấu hình kết nối API Backend (tuỳ chọn)
+        │   ├── SettingsModal.vue                   # Cấu hình kết nối SQL Server API
         │   ├── SpaceXLogo.vue                      # Logo SpaceX
         │   ├── SpaceXWatermark.vue                 # Watermark nền SpaceX
         │   └── StudentPortalIntroView.vue          # Cổng sinh viên trước khi quét mặt
         └── utils/
             ├── faceEngine.js                       # MediaPipe 468pt + 128-D + chống ngược sáng LUT
             ├── sound.js                            # Bộ phát âm thanh Web Audio API
-            ├── storage.js                          # Quản lý tài khoản, hồ sơ sinh viên & điểm danh
+            ├── storage.js                          # SQL Server REST API client
             └── validation.js                       # Validate form đăng ký & đăng nhập
 ```
 
@@ -110,27 +123,36 @@ White Queen/
 ## 🛠️ Hướng Dẫn Cài Đặt & Chạy Dự Án
 
 ### Yêu Cầu Môi Trường
+- **SQL Server** (`localhost\SQLEXPRESS25`) + **ODBC Driver 18 for SQL Server**
+- **Python**: 3.10+ (với `fastapi`, `uvicorn`, `pyodbc`, `pydantic`)
 - **Node.js**: v18.0.0 trở lên
 - **Trình duyệt**: Chrome / Edge hỗ trợ WebRTC Camera (`localhost` hoặc `HTTPS`)
 
-### Các Bước Chạy
+### 1. Khởi chạy Backend API (SQL Server)
 ```bash
-# 1. Di chuyển vào thư mục frontend
+cd backend
+pip install -r requirements.txt
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+### 2. Khởi chạy Frontend
+```bash
+# Di chuyển vào thư mục frontend
 cd web-frontend
 
-# 2. Cài đặt dependencies
+# Cài đặt dependencies
 npm install
 
-# 3. Chạy môi trường phát triển (Development Server)
+# Chạy môi trường phát triển (Development Server)
 npm run dev
 ```
 > Mở trình duyệt tại địa chỉ Vite hiển thị (mặc định `http://localhost:5173/`).
 
 ```bash
-# 4. Đóng gói bản Production
+# Đóng gói bản Production
 npm run build
 
-# 5. Xem trước bản build Production
+# Xem trước bản build Production
 npm run preview
 ```
 

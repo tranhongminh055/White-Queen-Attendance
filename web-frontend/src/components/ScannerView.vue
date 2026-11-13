@@ -6,8 +6,8 @@ import { sound } from '../utils/sound'
 
 const emit = defineEmits(['notify', 'update:stats'])
 
-const classes = ref(storage.getClasses())
-const selectedClassId = ref(classes.value[0]?.id || 'CNTT-K21A')
+const classes = ref([])
+const selectedClassId = ref('CNTT-K21A')
 
 const videoRef = ref(null)
 const overlayCanvasRef = ref(null)
@@ -25,11 +25,23 @@ const matchStatus = ref(null) // 'success' | 'duplicate' | 'searching' | 'unknow
 const logs = ref([])
 const students = ref([])
 
-function refreshData() {
-  classes.value = storage.getClasses()
-  students.value = storage.getStudents()
-  logs.value = storage.getAttendanceLogs(selectedClassId.value)
-  updateParentStats()
+async function refreshData() {
+  try {
+    const [clsList, stuList, logList] = await Promise.all([
+      storage.getClasses(),
+      storage.getStudents(),
+      storage.getAttendanceLogs(selectedClassId.value)
+    ])
+    classes.value = clsList
+    if (clsList.length > 0 && !clsList.some(c => c.id === selectedClassId.value)) {
+      selectedClassId.value = clsList[0].id
+    }
+    students.value = stuList
+    logs.value = logList
+    updateParentStats()
+  } catch (err) {
+    console.error('Failed to load SQL Server data:', err)
+  }
 }
 
 const currentClassStudents = computed(() => {
@@ -189,13 +201,13 @@ async function triggerScan(isManual = true) {
     const candidate = match.student
     drawScannerOverlay(detections, `${candidate.name} (${match.confidence})`)
 
-    const result = storage.recordAttendance({
+    const result = await storage.recordAttendance({
       studentId: candidate.id,
       studentName: candidate.name,
       classId: candidate.classId,
       avatar: candidate.avatar,
       confidence: match.confidence,
-      device: 'Live Camera · ResNet-34 128D'
+      device: 'Live Camera · MediaPipe 468pt · 128D'
     })
 
     lastMatched.value = {
@@ -223,7 +235,7 @@ async function triggerScan(isManual = true) {
       }
     }
 
-    refreshData()
+    await refreshData()
   } catch (err) {
     console.error('Real face scan error:', err)
     matchStatus.value = null
