@@ -18,7 +18,6 @@ const emit = defineEmits(['navigate', 'back', 'notify'])
 const fullName = ref('')
 const employeeId = ref('')
 const email = ref('')
-const role = ref('student') // 'lecturer' | 'student'
 const password = ref('')
 const confirmPassword = ref('')
 const showPassword = ref(false)
@@ -37,11 +36,6 @@ const errors = reactive({
 })
 
 const passwordStrength = computed(() => evaluatePasswordStrength(password.value))
-
-function selectRole(val) {
-  role.value = val
-  sound.playBeep()
-}
 
 async function validateField(field) {
   if (field === 'fullName') {
@@ -125,7 +119,7 @@ async function handleRegisterSubmit() {
       fullName: fullName.value,
       employeeId: employeeId.value,
       email: email.value,
-      role: role.value,
+      role: 'student',
       password: password.value
     })
 
@@ -308,32 +302,6 @@ async function handleRegisterSubmit() {
               />
             </div>
             <p v-if="errors.email" class="sx-field-error">{{ errors.email }}</p>
-          </div>
-
-          <!-- Role Radio Cards -->
-          <div class="sx-field">
-            <span class="sx-field-label">VAI TRÒ</span>
-            <div class="sx-role-grid">
-              <button
-                type="button"
-                class="sx-role-option"
-                :class="{ active: role === 'lecturer' }"
-                @click="selectRole('lecturer')"
-              >
-                <span class="sx-radio-dot"></span>
-                <span>Giảng viên</span>
-              </button>
-
-              <button
-                type="button"
-                class="sx-role-option"
-                :class="{ active: role === 'student' }"
-                @click="selectRole('student')"
-              >
-                <span class="sx-radio-dot"></span>
-                <span>Sinh viên</span>
-              </button>
-            </div>
           </div>
 
           <!-- Password + 4-Bar Strength Meter -->
@@ -885,50 +853,6 @@ async function handleRegisterSubmit() {
   padding: 4px;
 }
 .sx-eye-btn:hover { color: #e2e8f0; }
-
-/* Role Grid */
-.sx-role-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.sx-role-option {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: #06090e;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 2px;
-  color: #94a3b8;
-  font-family: var(--font-sans);
-  font-size: 0.82rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.sx-radio-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ffffff;
-  opacity: 0.7;
-}
-
-.sx-role-option.active {
-  background: rgba(14, 165, 233, 0.12);
-  border-color: #0284c7;
-  color: #ffffff;
-}
-
-.sx-role-option.active .sx-radio-dot {
-  background: #38bdf8;
-  opacity: 1;
-  box-shadow: 0 0 8px #38bdf8;
-}
 
 /* Password Strength Bar */
 .sx-strength-row {

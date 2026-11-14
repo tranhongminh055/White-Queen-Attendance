@@ -351,9 +351,8 @@ def register_account(payload: RegisterRequest):
     full_name = payload.fullName.strip()
     norm_id = payload.employeeId.strip().upper()
     norm_email = payload.email.strip().lower()
-    role = (payload.role or "student").strip().lower()
-    if role not in ("student", "lecturer"):
-        role = "student"
+    # Public registration is strictly for students; lecturer accounts are managed separately.
+    role = "student"
 
     if not EMPLOYEE_ID_REGEX.match(norm_id):
         return {
