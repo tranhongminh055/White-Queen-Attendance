@@ -11,6 +11,7 @@ import CookieBanner from './components/CookieBanner.vue'
 import LoginView from './components/LoginView.vue'
 import RegisterView from './components/RegisterView.vue'
 import StudentPortalIntroView from './components/StudentPortalIntroView.vue'
+import LecturerRedirectView from './components/LecturerRedirectView.vue'
 import { storage } from './utils/storage'
 import { sound } from './utils/sound'
 
@@ -59,7 +60,7 @@ function handleCookieReject() {
   })
 }
 
-const protectedTabs = ['face-intro', 'scanner', 'enrollment', 'dashboard']
+const protectedTabs = ['face-intro', 'scanner', 'enrollment', 'dashboard', 'lecturer-redirect']
 
 function applyTab(tab, pushHistory = true) {
   if (tab !== 'landing' && !cookiesAccepted.value) {
@@ -79,6 +80,12 @@ function applyTab(tab, pushHistory = true) {
       message: 'Vui lòng đăng ký và đăng nhập tài khoản trước khi đăng ký khuôn mặt hoặc điểm danh!'
     })
     tab = 'login'
+  } else if (
+    protectedTabs.includes(tab) &&
+    tab !== 'lecturer-redirect' &&
+    storage.getCurrentProfile()?.role === 'lecturer'
+  ) {
+    tab = 'lecturer-redirect'
   }
 
   if (tab === 'settings') {
@@ -185,7 +192,7 @@ onBeforeUnmount(() => {
 
     <!-- Show Top Nav on app screens, or custom nav on Landing/Auth/Intro/Enrollment -->
     <HeaderNav 
-      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment'"
+      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
       :current-tab="currentTab" 
       :stats="globalStats"
       :can-back="canGoBack"
@@ -228,6 +235,13 @@ onBeforeUnmount(() => {
           @notify="addNotification"
         />
 
+        <!-- Lecturer Desktop Redirect Page -->
+        <LecturerRedirectView
+          v-else-if="currentTab === 'lecturer-redirect'"
+          @navigate="handleTabChange"
+          @notify="addNotification"
+        />
+
         <!-- iPad Live Scanner -->
         <ScannerView 
           v-else-if="currentTab === 'scanner'" 
@@ -260,7 +274,7 @@ onBeforeUnmount(() => {
 
     <!-- Cookie Banner (hidden on auth screens unless blocking redirect) -->
     <CookieBanner
-      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment'"
+      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
       :visible="showCookieBanner"
       :attention="cookieAttention"
       @accept="handleCookieAccept"

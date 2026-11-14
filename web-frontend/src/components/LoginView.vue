@@ -70,6 +70,15 @@ async function handleLogin() {
     sound.playSuccess()
     emit('login-success')
 
+    if (result.account.role === 'lecturer') {
+      emit('notify', {
+        type: 'success',
+        message: `Đăng nhập thành công! Vui lòng mở phần mềm SpaceX Desktop để tiếp tục.`
+      })
+      emit('navigate', 'lecturer-redirect')
+      return
+    }
+
     if (!hasFaceEnrolled) {
       emit('notify', {
         type: 'info',
