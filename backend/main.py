@@ -7,6 +7,7 @@ import secrets
 import smtplib
 import threading
 import time
+import urllib.request
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -38,6 +39,7 @@ ALLOWED_ORIGINS = [
 AUTH_RATE_LIMIT_PER_MIN = max(30, int(os.getenv("AUTH_RATE_LIMIT_PER_MIN", "180")))
 MAX_SNAPSHOT_LEN = 750_000
 APPROVAL_ADMIN_EMAIL = os.getenv("APPROVAL_ADMIN_EMAIL", "mt1479233@gmail.com").strip()
+EMAIL_WEBHOOK_URL = os.getenv("EMAIL_WEBHOOK_URL", "").strip()
 SMTP_USER = os.getenv("SMTP_USER", "").strip()
 SMTP_PASS = os.getenv("SMTP_PASS", "").strip()
 PUBLIC_API_BASE_URL = os.getenv(
@@ -363,13 +365,6 @@ def send_lecturer_approval_email(
     registered_at: str,
     token: str,
 ) -> None:
-    if not SMTP_USER or not SMTP_PASS or not APPROVAL_ADMIN_EMAIL:
-        print(
-            f"[APPROVAL] SMTP chưa cấu hình (SMTP_USER/SMTP_PASS). "
-            f"Yêu cầu giảng viên {employee_id} ({email}) đang ở trạng thái pending."
-        )
-        return
-
     approve_url = f"{PUBLIC_API_BASE_URL}/api/auth/lecturer-review?token={token}&decision=approve"
     reject_url = f"{PUBLIC_API_BASE_URL}/api/auth/lecturer-review?token={token}&decision=reject"
 
@@ -377,22 +372,8 @@ def send_lecturer_approval_email(
     safe_id = html.escape(employee_id)
     safe_email = html.escape(email)
     safe_time = html.escape(registered_at)
-
-    msg = EmailMessage()
-    msg["Subject"] = f"[White Queen] Xét duyệt tài khoản Giảng viên: {full_name} ({employee_id})"
-    msg["From"] = SMTP_USER
-    msg["To"] = APPROVAL_ADMIN_EMAIL
-    msg.set_content(
-        f"Có yêu cầu đăng ký tài khoản Giảng viên mới:\n"
-        f"- Họ tên: {full_name}\n"
-        f"- Mã GV: {employee_id}\n"
-        f"- Email: {email}\n"
-        f"- Thời gian: {registered_at}\n\n"
-        f"APPROVE: {approve_url}\n"
-        f"REJECT: {reject_url}\n"
-    )
-    msg.add_alternative(
-        f"""
+    subject = f"[White Queen] Xét duyệt tài khoản Giảng viên: {full_name} ({employee_id})"
+    html_body = f"""
         <div style="font-family:Segoe UI,Arial,sans-serif;background:#06090e;color:#f8fafc;padding:28px;border:1px solid #1e293b;max-width:560px;margin:auto;">
           <div style="font-size:12px;letter-spacing:2px;color:#38bdf8;margin-bottom:8px;">SPACE X · WHITE QUEEN BIOMETRIC</div>
           <h2 style="margin:0 0 16px;font-size:20px;color:#ffffff;">Yêu cầu đăng ký tài khoản Giảng viên</h2>
@@ -408,9 +389,45 @@ def send_lecturer_approval_email(
           </div>
           <p style="margin-top:20px;font-size:12px;color:#64748b;">Liên kết chỉ có hiệu lực 1 lần trong vòng 48 giờ. Tài khoản chưa thể đăng nhập phần mềm Desktop cho tới khi bạn bấm APPROVE.</p>
         </div>
-        """,
-        subtype="html",
+        """
+
+    if EMAIL_WEBHOOK_URL:
+        try:
+            payload_bytes = json.dumps({"subject": subject, "html": html_body}).encode("utf-8")
+            req = urllib.request.Request(
+                EMAIL_WEBHOOK_URL,
+                data=payload_bytes,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                print(f"[APPROVAL] Đã gửi email qua HTTPS webhook cho {employee_id} (status {resp.status})")
+            return
+        except Exception as exc:
+            print(f"[APPROVAL] Lỗi gửi email qua HTTPS webhook cho {employee_id}: {exc}")
+            return
+
+    if not SMTP_USER or not SMTP_PASS or not APPROVAL_ADMIN_EMAIL:
+        print(
+            f"[APPROVAL] Chưa cấu hình EMAIL_WEBHOOK_URL hoặc SMTP. "
+            f"Yêu cầu giảng viên {employee_id} ({email}) đang ở trạng thái pending."
+        )
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = SMTP_USER
+    msg["To"] = APPROVAL_ADMIN_EMAIL
+    msg.set_content(
+        f"Có yêu cầu đăng ký tài khoản Giảng viên mới:\n"
+        f"- Họ tên: {full_name}\n"
+        f"- Mã GV: {employee_id}\n"
+        f"- Email: {email}\n"
+        f"- Thời gian: {registered_at}\n\n"
+        f"APPROVE: {approve_url}\n"
+        f"REJECT: {reject_url}\n"
     )
+    msg.add_alternative(html_body, subtype="html")
 
     try:
         with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as server:
