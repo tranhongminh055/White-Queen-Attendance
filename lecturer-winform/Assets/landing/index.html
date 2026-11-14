@@ -1,43 +1,96 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPACE X · White Queen Lecturer Desktop</title>
+  <title>SPACE X · Biometric AI</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
-
 <body>
-  <!-- Full-page Biometric Watermark -->
-  <div class="sx-page-watermark"></div>
-  <div class="sx-page-grid-overlay"></div>
-
   <!-- Top Navigation -->
   <header class="sx-nav">
     <div class="sx-nav-inner">
       <div class="sx-brand">
         <span class="sx-logo">SPACE <span class="sx-logo-x">X</span></span>
-        <span class="sx-badge-tag">BIOMETRIC AI · LECTURER</span>
+        <span class="sx-badge-tag">BIOMETRIC AI</span>
       </div>
+
+      <nav class="sx-links">
+        <a href="#features">TÍNH NĂNG</a>
+        <a href="#workflow">QUY TRÌNH</a>
+        <a href="#roles">VAI TRÒ</a>
+        <a href="#security">BẢO MẬT</a>
+      </nav>
     </div>
   </header>
 
   <!-- Hero Section -->
-  <section class="sx-hero">
+  <section class="sx-hero" id="workflow">
+    <div class="sx-hero-bg"></div>
+    <div class="sx-hero-grid-overlay"></div>
+
     <div class="sx-hero-inner">
       <div class="sx-hero-copy">
-        <div class="sx-eyebrow">HỆ THỐNG ĐIỂM DANH GIẢNG VIÊN · DESKTOP .NET 10</div>
+        <div class="sx-eyebrow">HỆ THỐNG ĐIỂM DANH SINH TRẮC HỌC</div>
 
         <h1 class="sx-hero-title">
           Điểm danh bằng khuôn mặt.<br />
-          <span class="sx-cyan">Chính xác trong chưa đầy 1 giây.</span>
+          <span class="sx-cyan">Chính xác trong chưa<br />đầy 1 giây.</span>
         </h1>
+
+        <p class="sx-hero-desc">
+          Nền tảng điểm danh bằng AI nhận diện nhiều khuôn mặt cùng lúc,
+          chống giả mạo và ghi nhận tự động. Không thẻ, không chạm,
+          không chờ đợi.
+        </p>
 
         <div class="sx-hero-cta">
           <button type="button" class="sx-btn-primary sx-btn-lg" data-action="start_attendance">
             BẮT ĐẦU NGAY
           </button>
+        </div>
+      </div>
+
+      <!-- Right Biometric HUD Card -->
+      <div class="sx-hud-card" id="roles">
+        <div class="sx-hud-top">
+          <span class="sx-hud-live"><i class="sx-rec-dot"></i> TRỰC TIẾP · CAM-01 · CỔNG CHÍNH</span>
+          <span class="sx-hud-fps">30 FPS</span>
+        </div>
+
+        <div class="sx-hud-viewport">
+          <img src="./assets/hero-biometric.jpg" alt="Biometric AI Scanner" class="sx-hud-img" />
+          <div class="sx-scan-line"></div>
+
+          <div class="sx-face-box sx-face-1">
+            <span class="sx-face-tag">Nguyễn Minh Anh · 99.4%</span>
+          </div>
+          <div class="sx-face-box sx-face-2">
+            <span class="sx-face-tag">Trần Quốc Bảo · 97.8%</span>
+          </div>
+          <div class="sx-face-box sx-face-3">
+            <span class="sx-face-tag">Lê Thu Hà · 98.6%</span>
+          </div>
+
+          <div class="sx-hud-bottom-meta">
+            <span>3 / 50 KHUÔN MẶT</span>
+            <span>ĐỘ TRỄ 28MS</span>
+          </div>
+        </div>
+
+        <div class="sx-hud-thumbs">
+          <div class="sx-thumb">
+            <img src="./assets/site-factory.jpg" alt="Cổng A" />
+            <div class="sx-thumb-cap"><i class="sx-ok-dot"></i> CỔNG A · 12 NGƯỜI</div>
+          </div>
+          <div class="sx-thumb">
+            <img src="./assets/site-starbase.jpg" alt="Xưởng" />
+            <div class="sx-thumb-cap"><i class="sx-ok-dot"></i> XƯỞNG · ĐÃ XÁC THỰC</div>
+          </div>
+          <div class="sx-thumb">
+            <img src="./assets/hero-biometric.jpg" alt="Liveness" />
+            <div class="sx-thumb-cap"><i class="sx-ok-dot"></i> LIVENESS OK</div>
+          </div>
         </div>
       </div>
     </div>
@@ -46,16 +99,16 @@
     <div class="sx-stats-strip">
       <div class="sx-stats-inner">
         <div class="sx-stat-item">
-          <div class="sx-stat-value sx-cyan-soft">99.7%</div>
+          <div class="sx-stat-value">99.7<span class="sx-cyan-soft">%</span></div>
           <div class="sx-stat-label">ĐỘ CHÍNH XÁC</div>
         </div>
         <div class="sx-stat-item">
-          <div class="sx-stat-value">&lt;<span class="sx-cyan">300</span>ms</div>
+          <div class="sx-stat-value">&lt;<span class="sx-cyan-soft">300</span>ms</div>
           <div class="sx-stat-label">ĐỘ TRỄ NHẬN DIỆN</div>
         </div>
         <div class="sx-stat-item">
-          <div class="sx-stat-value">5<span class="sx-cyan">+</span></div>
-          <div class="sx-stat-label">GÓC KHUÔN MẶT / SINH VIÊN</div>
+          <div class="sx-stat-value">50<span class="sx-cyan-soft">+</span></div>
+          <div class="sx-stat-label">KHUÔN MẶT CÙNG LÚC</div>
         </div>
       </div>
     </div>
@@ -63,8 +116,9 @@
 
   <!-- Section 01: Core Features -->
   <section class="sx-section" id="features">
-    <div class="sx-section-inner">
-      <h2 class="sx-section-title">Xây dựng cho giảng đường thực tế</h2>
+    <div class="sx-section-inner" id="security">
+      <div class="sx-section-kicker">// 01 · TÍNH NĂNG CHÍNH</div>
+      <h2 class="sx-section-title">Xây dựng cho điểm danh chính xác</h2>
 
       <div class="sx-feature-grid">
         <article class="sx-feature-card">
@@ -73,44 +127,48 @@
             <span class="sx-card-code">F-01</span>
           </div>
           <h3>Nhận diện real-time</h3>
-          <p>Phát hiện và đối chiếu khuôn mặt trong dưới 300ms qua webcam laptop hoặc camera USB, ngay cả khi thiếu
-            sáng.</p>
+          <p>Phát hiện và đối chiếu khuôn mặt trong dưới 300ms, ngay cả khi thiếu sáng.</p>
         </article>
 
-        <article class="sx-feature-card" id="sync">
+        <article class="sx-feature-card">
           <div class="sx-card-head">
-            <span class="sx-card-icon">🔗</span>
+            <span class="sx-card-icon">🛡️</span>
             <span class="sx-card-code">F-02</span>
           </div>
-          <h3>Đồng bộ từ Cổng Sinh viên</h3>
-          <p>Kéo trực tiếp hồ sơ và 5 góc vector 128D sinh viên đã đăng ký trên web về bộ nhớ máy, không cần nhập tay.
-          </p>
+          <h3>Chống giả mạo</h3>
+          <p>Liveness detection chặn ảnh, video và mặt nạ giả mạo bằng phân tích chiều sâu 3D.</p>
         </article>
 
-        <article class="sx-feature-card" id="workflow">
-          <div class="sx-card-head">
-            <span class="sx-card-icon">💾</span>
-            <span class="sx-card-code">F-03</span>
-          </div>
-          <h3>Chạy Offline &amp; Tự đồng bộ</h3>
-          <p>Lưu đệm SQLite ngay trên máy WinForms khi giảng đường mất Wi-Fi, tự động đẩy kết quả lên Supabase khi có
-            mạng.</p>
-        </article>
-
-        <article class="sx-feature-card" id="security">
+        <article class="sx-feature-card">
           <div class="sx-card-head">
             <span class="sx-card-icon">📊</span>
-            <span class="sx-card-code">F-04</span>
+            <span class="sx-card-code">F-03</span>
           </div>
-          <h3>Báo cáo Excel &amp; Bảo mật</h3>
-          <p>Phân loại Đúng giờ / Đi muộn / Có phép / Vắng, chỉnh sửa thủ công và xuất file .xlsx chuẩn trong 1 cú nhấp.
-          </p>
+          <h3>Báo cáo tức thì</h3>
+          <p>Điểm danh tự động ghi nhận, xuất báo cáo theo lớp và học kỳ chỉ với một cú nhấp.</p>
         </article>
       </div>
     </div>
   </section>
 
+  <!-- Biometric Redirect Overlay -->
+  <div class="sx-redirect-overlay" id="redirectOverlay" aria-hidden="true">
+    <div class="sx-redirect-panel">
+      <div class="sx-redirect-reticle">
+        <div class="sx-ring sx-ring-outer"></div>
+        <div class="sx-ring sx-ring-inner"></div>
+        <div class="sx-redirect-core">
+          <span class="sx-logo">SPACE <span class="sx-logo-x">X</span></span>
+        </div>
+      </div>
+      <div class="sx-redirect-kicker">BIOMETRIC AI · AUTH GATEWAY</div>
+      <div class="sx-redirect-status" id="redirectStatus">KHỞI TẠO CỔNG XÁC THỰC...</div>
+      <div class="sx-redirect-progress">
+        <div class="sx-redirect-bar" id="redirectBar"></div>
+      </div>
+    </div>
+  </div>
+
   <script src="./app.js"></script>
 </body>
-
 </html>

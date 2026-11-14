@@ -2,12 +2,15 @@ using System.Drawing;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using WhiteQueenLecturer.Services;
 
 namespace WhiteQueenLecturer.Forms;
 
 public sealed class MainForm : Form
 {
     private readonly WebView2 _webView;
+    private readonly ApiClient _apiClient = new();
+    private LecturerAccount? _currentLecturer;
 
     public MainForm()
     {
@@ -51,7 +54,7 @@ public sealed class MainForm : Form
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
-            _webView.Source = new Uri("https://app.whitequeen.local/landing/index.html");
+            NavigateTo("landing/index.html");
         }
         catch (Exception ex)
         {
@@ -64,7 +67,12 @@ public sealed class MainForm : Form
         }
     }
 
-    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
+    private void NavigateTo(string relativePath)
+    {
+        _webView.Source = new Uri($"https://app.whitequeen.local/{relativePath}");
+    }
+
+    private async void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
         try
         {
@@ -77,14 +85,43 @@ public sealed class MainForm : Form
             var action = actionEl.GetString();
             switch (action)
             {
+                case "open_landing":
+                    NavigateTo("landing/index.html");
+                    break;
+
                 case "open_login":
                 case "start_attendance":
-                    MessageBox.Show(
-                        "Landing Page đã kết nối thành công với C# WinForms (.NET 10)!\n\nBước tiếp theo: Xây dựng Backend API Giảng viên (/api/lecturer/*) & Form Đăng nhập + Camera Điểm danh.",
-                        "White Queen Lecturer Desktop",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
+                    NavigateTo("login/index.html");
+                    break;
+
+                case "open_dashboard":
+                    var nameParam = Uri.EscapeDataString(_currentLecturer?.FullName ?? "Giảng viên");
+                    var idParam = Uri.EscapeDataString(_currentLecturer?.EmployeeId ?? string.Empty);
+                    NavigateTo($"dashboard/index.html?name={nameParam}&id={idParam}");
+                    break;
+
+                case "login_submit":
+                    var identifier = doc.RootElement.TryGetProperty("identifier", out var idEl)
+                        ? idEl.GetString() ?? string.Empty
+                        : string.Empty;
+                    var password = doc.RootElement.TryGetProperty("password", out var pwEl)
+                        ? pwEl.GetString() ?? string.Empty
+                        : string.Empty;
+
+                    var result = await _apiClient.LoginLecturerAsync(identifier, password);
+                    if (result.Success && result.Account is not null)
+                    {
+                        _currentLecturer = result.Account;
+                    }
+
+                    var resultJson = JsonSerializer.Serialize(new
+                    {
+                        success = result.Success,
+                        message = result.Message,
+                        fullName = result.Account?.FullName,
+                        employeeId = result.Account?.EmployeeId
+                    });
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onLoginResult && window.onLoginResult({resultJson})");
                     break;
             }
         }
@@ -94,4 +131,3 @@ public sealed class MainForm : Form
         }
     }
 }
-

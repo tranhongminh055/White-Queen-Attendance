@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPACE X · Lecturer Workspace</title>
+  <style>
+    :root {
+      --bg: #020408;
+      --surface: #0b1018;
+      --border: rgba(255, 255, 255, 0.1);
+      --cyan: #00d2ff;
+      --emerald: #34d399;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --font-mono: "Cascadia Code", "Consolas", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 15%, rgba(0, 210, 255, 0.12), transparent 48%),
+        radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.12), transparent 48%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      animation: dashEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    body.is-leaving {
+      opacity: 0;
+      transform: scale(0.985);
+    }
+
+    .topbar {
+      height: 64px;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(2, 4, 8, 0.88);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: 0.22em;
+    }
+
+    .logo span { color: var(--cyan); }
+
+    .badge {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      color: var(--emerald);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      background: rgba(16, 185, 129, 0.08);
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    .user-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .lecturer-pill {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      padding: 7px 14px;
+      border-radius: 6px;
+    }
+
+    .logout-btn {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 600;
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .logout-btn:hover {
+      background: rgba(239, 68, 68, 0.18);
+      border-color: rgba(239, 68, 68, 0.6);
+    }
+
+    .workspace {
+      max-width: 1120px;
+      margin: 48px auto;
+      padding: 0 28px;
+    }
+
+    .hero-card {
+      background: rgba(11, 16, 24, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 36px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .kicker {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      letter-spacing: 0.16em;
+      color: var(--cyan);
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-size: 1.9rem;
+      margin-bottom: 10px;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 680px;
+    }
+
+    @keyframes dashEnter {
+      from { opacity: 0; transform: translateY(12px) scale(0.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">SPACE <span>X</span></div>
+      <div class="badge">● WORKSPACE READY</div>
+    </div>
+    <div class="user-actions">
+      <div class="lecturer-pill" id="lecturerInfo">Giảng viên</div>
+      <button type="button" class="logout-btn" id="btnLogout">ĐĂNG XUẤT</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <section class="hero-card">
+      <div class="kicker">// BẢNG ĐIỀU KHIỂN GIẢNG VIÊN</div>
+      <h1 id="welcomeTitle">Xin chào!</h1>
+      <p>
+        Phiên làm việc Giảng viên đã được xác thực thành công. Không gian này đã sẵn sàng để tích hợp
+        <strong>Camera điểm danh AI trực tiếp</strong>, danh sách lớp học và <strong>xuất báo cáo Excel</strong>.
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(window.location.search)
+    const name = params.get('name') || 'Giảng viên'
+    const id = params.get('id')
+
+    document.getElementById('lecturerInfo').textContent = id ? `${name} · ${id}` : name
+    document.getElementById('welcomeTitle').textContent = `Xin chào, ${name}`
+
+    document.getElementById('btnLogout').addEventListener('click', () => {
+      document.body.classList.add('is-leaving')
+      setTimeout(() => {
+        if (window.chrome && window.chrome.webview) {
+          window.chrome.webview.postMessage({ action: 'open_landing' })
+        }
+      }, 260)
+    })
+  </script>
+</body>
+</html>
+
