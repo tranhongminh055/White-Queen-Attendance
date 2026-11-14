@@ -19,6 +19,9 @@ BEGIN
         Role NVARCHAR(32) NOT NULL DEFAULT N'student',
         ClassId NVARCHAR(40) NOT NULL DEFAULT N'CNTT-K21A',
         PasswordHash NVARCHAR(255) NOT NULL,
+        ApprovalStatus NVARCHAR(24) NOT NULL DEFAULT N'approved',
+        ApprovalToken NVARCHAR(128) NULL,
+        ApprovalExpiresAt DATETIME2 NULL,
         CreatedAt DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME()
     );
 END

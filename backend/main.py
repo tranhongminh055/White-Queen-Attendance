@@ -1,17 +1,21 @@
+import html
 import json
 import math
 import os
 import re
+import secrets
+import smtplib
 import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
+from email.message import EmailMessage
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from db import (
@@ -33,6 +37,12 @@ ALLOWED_ORIGINS = [
 ]
 AUTH_RATE_LIMIT_PER_MIN = max(30, int(os.getenv("AUTH_RATE_LIMIT_PER_MIN", "180")))
 MAX_SNAPSHOT_LEN = 750_000
+APPROVAL_ADMIN_EMAIL = os.getenv("APPROVAL_ADMIN_EMAIL", "mt1479233@gmail.com").strip()
+SMTP_USER = os.getenv("SMTP_USER", "").strip()
+SMTP_PASS = os.getenv("SMTP_PASS", "").strip()
+PUBLIC_API_BASE_URL = os.getenv(
+    "PUBLIC_API_BASE_URL", "https://white-queen-attendance.onrender.com"
+).rstrip("/")
 
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 _rate_lock = threading.Lock()
@@ -346,13 +356,81 @@ def check_conflicts(
         conn.close()
 
 
+def send_lecturer_approval_email(
+    employee_id: str,
+    full_name: str,
+    email: str,
+    registered_at: str,
+    token: str,
+) -> None:
+    if not SMTP_USER or not SMTP_PASS or not APPROVAL_ADMIN_EMAIL:
+        print(
+            f"[APPROVAL] SMTP chưa cấu hình (SMTP_USER/SMTP_PASS). "
+            f"Yêu cầu giảng viên {employee_id} ({email}) đang ở trạng thái pending."
+        )
+        return
+
+    approve_url = f"{PUBLIC_API_BASE_URL}/api/auth/lecturer-review?token={token}&decision=approve"
+    reject_url = f"{PUBLIC_API_BASE_URL}/api/auth/lecturer-review?token={token}&decision=reject"
+
+    safe_name = html.escape(full_name)
+    safe_id = html.escape(employee_id)
+    safe_email = html.escape(email)
+    safe_time = html.escape(registered_at)
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[White Queen] Xét duyệt tài khoản Giảng viên: {full_name} ({employee_id})"
+    msg["From"] = SMTP_USER
+    msg["To"] = APPROVAL_ADMIN_EMAIL
+    msg.set_content(
+        f"Có yêu cầu đăng ký tài khoản Giảng viên mới:\n"
+        f"- Họ tên: {full_name}\n"
+        f"- Mã GV: {employee_id}\n"
+        f"- Email: {email}\n"
+        f"- Thời gian: {registered_at}\n\n"
+        f"APPROVE: {approve_url}\n"
+        f"REJECT: {reject_url}\n"
+    )
+    msg.add_alternative(
+        f"""
+        <div style="font-family:Segoe UI,Arial,sans-serif;background:#06090e;color:#f8fafc;padding:28px;border:1px solid #1e293b;max-width:560px;margin:auto;">
+          <div style="font-size:12px;letter-spacing:2px;color:#38bdf8;margin-bottom:8px;">SPACE X · WHITE QUEEN BIOMETRIC</div>
+          <h2 style="margin:0 0 16px;font-size:20px;color:#ffffff;">Yêu cầu đăng ký tài khoản Giảng viên</h2>
+          <table style="width:100%;border-collapse:collapse;margin-bottom:22px;font-size:14px;">
+            <tr><td style="padding:8px 0;color:#94a3b8;width:130px;">Họ và tên:</td><td style="padding:8px 0;color:#fff;font-weight:600;">{safe_name}</td></tr>
+            <tr><td style="padding:8px 0;color:#94a3b8;">Mã giảng viên:</td><td style="padding:8px 0;color:#38bdf8;font-weight:600;">{safe_id}</td></tr>
+            <tr><td style="padding:8px 0;color:#94a3b8;">Email:</td><td style="padding:8px 0;color:#fff;">{safe_email}</td></tr>
+            <tr><td style="padding:8px 0;color:#94a3b8;">Thời gian:</td><td style="padding:8px 0;color:#cbd5e1;">{safe_time}</td></tr>
+          </table>
+          <div style="display:flex;gap:12px;">
+            <a href="{approve_url}" style="display:inline-block;background:#22c55e;color:#052e16;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:4px;margin-right:10px;">✅ APPROVE (CHẤP NHẬN)</a>
+            <a href="{reject_url}" style="display:inline-block;background:#ef4444;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:4px;">❌ REJECT (TỪ CHỐI)</a>
+          </div>
+          <p style="margin-top:20px;font-size:12px;color:#64748b;">Liên kết chỉ có hiệu lực 1 lần trong vòng 48 giờ. Tài khoản chưa thể đăng nhập phần mềm Desktop cho tới khi bạn bấm APPROVE.</p>
+        </div>
+        """,
+        subtype="html",
+    )
+
+    try:
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.send_message(msg)
+    except Exception as exc:
+        print(f"[APPROVAL] Lỗi gửi email xét duyệt cho {employee_id}: {exc}")
+
+
 @app.post("/api/auth/register")
-def register_account(payload: RegisterRequest):
+def register_account(payload: RegisterRequest, background_tasks: BackgroundTasks):
     full_name = payload.fullName.strip()
     norm_id = payload.employeeId.strip().upper()
     norm_email = payload.email.strip().lower()
-    # Public registration is strictly for students; lecturer accounts are managed separately.
-    role = "student"
+    role = (payload.role or "student").strip().lower()
+    if role not in ("student", "lecturer"):
+        role = "student"
 
     if not EMPLOYEE_ID_REGEX.match(norm_id):
         return {
@@ -391,21 +469,54 @@ def register_account(payload: RegisterRequest):
                 "message": msg,
             }
 
+        approval_status = "pending" if role == "lecturer" else "approved"
+        approval_token = secrets.token_urlsafe(32) if role == "lecturer" else None
+        approval_expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=48)
+            if role == "lecturer"
+            else None
+        )
+
         cur.execute(
             """
-            INSERT INTO Accounts (EmployeeId, FullName, Email, Role, ClassId, PasswordHash)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO Accounts (
+                EmployeeId, FullName, Email, Role, ClassId, PasswordHash,
+                ApprovalStatus, ApprovalToken, ApprovalExpiresAt
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (norm_id, full_name, norm_email, role, class_id, pw_hash),
+            (
+                norm_id,
+                full_name,
+                norm_email,
+                role,
+                class_id,
+                pw_hash,
+                approval_status,
+                approval_token,
+                approval_expires_at,
+            ),
         )
-        cur.execute(
-            """
-            INSERT INTO StudentProfiles (StudentId, FullName, ClassId, Email, AvatarDataUrl, EmbeddingCreated, RegisteredAt)
-            VALUES (?, ?, ?, ?, NULL, 0, ?)
-            """,
-            (norm_id, full_name, class_id, norm_email, registered_at),
-        )
+        if role == "student":
+            cur.execute(
+                """
+                INSERT INTO StudentProfiles (StudentId, FullName, ClassId, Email, AvatarDataUrl, EmbeddingCreated, RegisteredAt)
+                VALUES (?, ?, ?, ?, NULL, 0, ?)
+                """,
+                (norm_id, full_name, class_id, norm_email, registered_at),
+            )
         conn.commit()
+
+        if role == "lecturer" and approval_token:
+            background_tasks.add_task(
+                send_lecturer_approval_email,
+                norm_id,
+                full_name,
+                norm_email,
+                registered_at,
+                approval_token,
+            )
+
         return {
             "success": True,
             "account": {
@@ -414,6 +525,7 @@ def register_account(payload: RegisterRequest):
                 "email": norm_email,
                 "role": role,
                 "classId": class_id,
+                "approvalStatus": approval_status,
                 "createdAt": registered_at,
             },
         }
@@ -434,6 +546,101 @@ def register_account(payload: RegisterRequest):
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+
+def _render_review_html(title: str, subtitle: str, accent: str = "#38bdf8") -> str:
+    return f"""<!DOCTYPE html>
+<html lang="vi">
+<head><meta charset="utf-8" /><title>{html.escape(title)}</title></head>
+<body style="margin:0;background:#000;color:#f8fafc;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;">
+  <div style="background:#070b11;border:1px solid rgba(255,255,255,0.12);padding:34px 36px;max-width:480px;text-align:center;">
+    <div style="font-size:11px;letter-spacing:2.5px;color:#38bdf8;margin-bottom:10px;">SPACE X · WHITE QUEEN</div>
+    <h1 style="margin:0 0 12px;font-size:22px;color:{accent};">{html.escape(title)}</h1>
+    <p style="margin:0;color:#cbd5e1;font-size:14px;line-height:1.6;">{html.escape(subtitle)}</p>
+  </div>
+</body>
+</html>"""
+
+
+@app.get("/api/auth/lecturer-review", response_class=HTMLResponse)
+def review_lecturer_registration(
+    token: str = Query(min_length=16),
+    decision: str = Query(...),
+):
+    norm_decision = decision.strip().lower()
+    if norm_decision not in ("approve", "reject"):
+        return HTMLResponse(
+            _render_review_html("Yêu cầu không hợp lệ", "Tham số decision phải là approve hoặc reject.", "#ef4444"),
+            status_code=400,
+        )
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT EmployeeId, FullName, Email, ApprovalStatus, ApprovalExpiresAt
+            FROM Accounts
+            WHERE ApprovalToken = ? AND Role = 'lecturer'
+            """,
+            (token.strip(),),
+        )
+        row = cur.fetchone()
+        if not row:
+            return HTMLResponse(
+                _render_review_html(
+                    "Liên kết đã được dùng hoặc không tồn tại",
+                    "Yêu cầu này đã được xử lý trước đó hoặc token không hợp lệ.",
+                    "#f59e0b",
+                ),
+                status_code=404,
+            )
+
+        emp_id, full_name, email, status_val, expires_at = row
+        if expires_at is not None:
+            exp_dt = expires_at
+            if isinstance(exp_dt, str):
+                exp_dt = datetime.fromisoformat(exp_dt)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp_dt:
+                return HTMLResponse(
+                    _render_review_html(
+                        "Liên kết đã hết hạn",
+                        f"Yêu cầu của {full_name} ({emp_id}) đã quá 48 giờ.",
+                        "#ef4444",
+                    ),
+                    status_code=410,
+                )
+
+        new_status = "approved" if norm_decision == "approve" else "rejected"
+        cur.execute(
+            """
+            UPDATE Accounts
+            SET ApprovalStatus = ?, ApprovalToken = NULL, ApprovalExpiresAt = NULL
+            WHERE EmployeeId = ?
+            """,
+            (new_status, emp_id),
+        )
+        conn.commit()
+
+        if new_status == "approved":
+            return HTMLResponse(
+                _render_review_html(
+                    "✅ Đã phê duyệt Giảng viên",
+                    f"Tài khoản {full_name} ({emp_id} · {email}) đã được kích hoạt và có thể đăng nhập Phần mềm Desktop.",
+                    "#22c55e",
+                )
+            )
+        return HTMLResponse(
+            _render_review_html(
+                "❌ Đã từ chối yêu cầu",
+                f"Tài khoản {full_name} ({emp_id} · {email}) đã bị từ chối và không thể đăng nhập.",
+                "#ef4444",
+            )
+        )
     finally:
         conn.close()
 
@@ -492,7 +699,8 @@ def login_account(payload: LoginRequest):
             """
             SELECT a.EmployeeId, a.FullName, a.Email, a.Role, a.ClassId, a.PasswordHash,
                    s.AvatarDataUrl, s.EmbeddingCreated,
-                   (SELECT COUNT(*) FROM FaceEmbeddings f WHERE f.StudentId = a.EmployeeId) AS FaceCount
+                   (SELECT COUNT(*) FROM FaceEmbeddings f WHERE f.StudentId = a.EmployeeId) AS FaceCount,
+                   COALESCE(a.ApprovalStatus, 'approved') AS ApprovalStatus
             FROM Accounts a
             LEFT JOIN StudentProfiles s ON s.StudentId = a.EmployeeId
             WHERE LOWER(a.Email) = ? OR UPPER(a.EmployeeId) = ?
@@ -512,6 +720,20 @@ def login_account(payload: LoginRequest):
                 "success": False,
                 "field": "password",
                 "message": "Mật khẩu không chính xác. Vui lòng thử lại!",
+            }
+
+        approval_status = (row[9] or "approved").lower()
+        if approval_status == "pending":
+            return {
+                "success": False,
+                "field": "username",
+                "message": "Tài khoản giảng viên đang chờ Admin phê duyệt qua email.",
+            }
+        if approval_status == "rejected":
+            return {
+                "success": False,
+                "field": "username",
+                "message": "Yêu cầu đăng ký tài khoản giảng viên đã bị từ chối.",
             }
 
         has_face = bool(row[7]) and (row[8] or 0) > 0
