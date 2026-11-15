@@ -182,6 +182,9 @@ if DB_ENGINE == "postgresql":
                 min_size=1,
                 max_size=DB_POOL_SIZE,
                 timeout=float(DB_CONNECT_TIMEOUT),
+                max_idle=120.0,
+                max_lifetime=1800.0,
+                check=ConnectionPool.check_connection,
                 open=True,
                 kwargs={"autocommit": False, "connect_timeout": DB_CONNECT_TIMEOUT},
             )

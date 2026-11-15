@@ -1,5 +1,7 @@
 using System.Drawing;
+using System.IO.Compression;
 using System.Text.Json;
+using System.Xml.Linq;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using WhiteQueenLecturer.Services;
@@ -218,6 +220,24 @@ public sealed class MainForm : Form
                     break;
                 }
 
+                case "parse_xlsx_students":
+                {
+                    try
+                    {
+                        var b64 = doc.RootElement.TryGetProperty("base64", out var bEl) ? bEl.GetString() ?? string.Empty : string.Empty;
+                        var ids = ExtractStudentIdsFromXlsx(Convert.FromBase64String(b64));
+                        var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(ids);
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({payload})");
+                    }
+                    catch (Exception ex)
+                    {
+                        var errJson = JsonSerializer.Serialize(new { detail = $"Lỗi đọc file Excel: {ex.Message}" });
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({{\"ok\":false,\"data\":{errJson}}})");
+                    }
+                    break;
+                }
+
                 case "class_delete":
                 {
                     var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
@@ -250,5 +270,130 @@ public sealed class MainForm : Form
         {
             // Ignore malformed messages from WebView2
         }
+    }
+
+    private static string[] ExtractStudentIdsFromXlsx(byte[] xlsxBytes)
+    {
+        using var ms = new MemoryStream(xlsxBytes);
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
+
+        var sharedStrings = new List<string>();
+        var ssEntry = zip.GetEntry("xl/sharedStrings.xml");
+        if (ssEntry is not null)
+        {
+            using var ssStream = ssEntry.Open();
+            var ssDoc = XDocument.Load(ssStream);
+            XNamespace ns = ssDoc.Root?.Name.Namespace ?? XNamespace.None;
+            foreach (var si in ssDoc.Descendants(ns + "si"))
+            {
+                sharedStrings.Add(string.Concat(si.Descendants(ns + "t").Select(t => t.Value)));
+            }
+        }
+
+        var sheetEntry = zip.GetEntry("xl/worksheets/sheet1.xml")
+            ?? zip.Entries.FirstOrDefault(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase));
+        if (sheetEntry is null) return Array.Empty<string>();
+
+        using var sheetStream = sheetEntry.Open();
+        var sheetDoc = XDocument.Load(sheetStream);
+        XNamespace sNs = sheetDoc.Root?.Name.Namespace ?? XNamespace.None;
+
+        var rows = new List<Dictionary<int, string>>();
+        foreach (var rowEl in sheetDoc.Descendants(sNs + "row"))
+        {
+            var rowMap = new Dictionary<int, string>();
+            var fallbackCol = 0;
+            foreach (var cEl in rowEl.Elements(sNs + "c"))
+            {
+                var cellRef = cEl.Attribute("r")?.Value;
+                var colIdx = ParseExcelColumnIndex(cellRef, fallbackCol);
+                fallbackCol = colIdx + 1;
+
+                var tAttr = cEl.Attribute("t")?.Value;
+                var val = cEl.Element(sNs + "v")?.Value ?? string.Empty;
+                if (tAttr == "s" && int.TryParse(val, out var idx) && idx >= 0 && idx < sharedStrings.Count)
+                    val = sharedStrings[idx];
+                else if (tAttr == "inlineStr")
+                    val = string.Concat(cEl.Descendants(sNs + "t").Select(t => t.Value));
+
+                var trimmed = val.Trim();
+                if (!string.IsNullOrWhiteSpace(trimmed))
+                    rowMap[colIdx] = trimmed;
+            }
+            if (rowMap.Count > 0)
+                rows.Add(rowMap);
+        }
+
+        if (rows.Count == 0) return Array.Empty<string>();
+
+        var headerRowIdx = -1;
+        var mssvCol = -1;
+        var scanLimit = Math.Min(rows.Count, 10);
+        for (var r = 0; r < scanLimit; r++)
+        {
+            foreach (var kv in rows[r])
+            {
+                var h = kv.Value.Trim().ToUpperInvariant();
+                if (h is "MSSV" or "MA_SV" or "MASV" or "STUDENTID" or "STUDENT_ID" or "MÃ SV" or "MA SV" or "ID")
+                {
+                    headerRowIdx = r;
+                    mssvCol = kv.Key;
+                    break;
+                }
+            }
+            if (headerRowIdx >= 0) break;
+        }
+
+        if (headerRowIdx < 0)
+        {
+            for (var r = 0; r < scanLimit; r++)
+            {
+                var sttEntry = rows[r].FirstOrDefault(kv => kv.Value.Trim().Equals("STT", StringComparison.OrdinalIgnoreCase));
+                if (rows[r].Values.Any(v => v.Trim().Equals("STT", StringComparison.OrdinalIgnoreCase)))
+                {
+                    headerRowIdx = r;
+                    mssvCol = sttEntry.Key + 1;
+                    break;
+                }
+            }
+        }
+
+        if (mssvCol < 0) mssvCol = 0;
+        var startIdx = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = startIdx; i < rows.Count; i++)
+        {
+            if (!rows[i].TryGetValue(mssvCol, out var rawId)) continue;
+            var id = rawId.Trim().ToUpperInvariant();
+            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
+                result.Add(id);
+        }
+        return result.ToArray();
+    }
+
+    private static int ParseExcelColumnIndex(string? cellRef, int fallbackCol)
+    {
+        if (string.IsNullOrWhiteSpace(cellRef)) return fallbackCol;
+        var col = 0;
+        var foundLetter = false;
+        foreach (var ch in cellRef)
+        {
+            if (ch is >= 'A' and <= 'Z')
+            {
+                col = col * 26 + (ch - 'A' + 1);
+                foundLetter = true;
+            }
+            else if (ch is >= 'a' and <= 'z')
+            {
+                col = col * 26 + (ch - 'a' + 1);
+                foundLetter = true;
+            }
+            else
+            {
+                break;
+            }
+        }
+        return foundLetter ? col - 1 : fallbackCol;
     }
 }

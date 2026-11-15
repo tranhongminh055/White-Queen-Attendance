@@ -1116,8 +1116,7 @@ def lookup_students(payload: LookupStudentsRequest):
         cur.execute(
             f"""
             SELECT a.EmployeeId, a.FullName, a.Email, a.Role,
-                   COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated,
-                   s.AvatarDataUrl
+                   COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated
             FROM Accounts a
             LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(a.EmployeeId)
             WHERE UPPER(a.EmployeeId) IN ({placeholders})
@@ -1133,7 +1132,6 @@ def lookup_students(payload: LookupStudentsRequest):
                 "email": row[2],
                 "role": row[3] or "student",
                 "embeddingCreated": bool(row[4]),
-                "avatar": row[5],
             }
 
         return [
@@ -1146,7 +1144,6 @@ def lookup_students(payload: LookupStudentsRequest):
                     "email": "",
                     "role": "",
                     "embeddingCreated": False,
-                    "avatar": None,
                 },
             )
             for sid in cleaned

@@ -141,17 +141,14 @@
       })
       .join('');
 
-    const newCardHtml = `
-      <div class="new-class-card" id="cardCreateNew">
-        <div class="plus-circle">+</div>
-        <div class="new-class-title">+ Tạo lớp học mới</div>
-        <div class="new-class-sub">NEW CLASS · IMPORT DANH SÁCH SV</div>
-      </div>
-    `;
+    if (!filtered.length) {
+      classesGrid.innerHTML = `<div style="grid-column:1/-1;padding:42px 24px;text-align:center;border:1px dashed rgba(255,255,255,0.12);border-radius:14px;color:#64748b;background:#070b10;">
+        ${allClasses.length ? 'Không tìm thấy lớp học phù hợp với từ khóa.' : 'Chưa có lớp học nào. Bấm nút "+ Tạo lớp học mới" ở góc trên để tạo lớp đầu tiên.'}
+      </div>`;
+      return;
+    }
 
-    classesGrid.innerHTML = cardsHtml + newCardHtml;
-
-    document.getElementById('cardCreateNew').addEventListener('click', openCreateClassPage);
+    classesGrid.innerHTML = cardsHtml;
 
     classesGrid.querySelectorAll('[data-copy]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -223,8 +220,8 @@
     document.getElementById('createClassForm').reset();
     document.getElementById('inputSemester').value = 'HK1 2025-2026';
     document.getElementById('fileProgressBox').style.display = 'none';
+    generateJoinCode();
     importedStudents = [];
-    activeImportFilter = 'all';
     renderPreviewStudents();
     switchView('create-class');
     setTimeout(() => document.getElementById('inputClassName').focus(), 60);
@@ -238,11 +235,31 @@
   }
 
   function extractStudentIdsFromText(text) {
-    const tokens = String(text || '')
-      .split(/[\r\n,;\t ]+/)
-      .map((s) => s.trim().toUpperCase())
-      .filter((s) => s && !['MSSV', 'STUDENTID', 'STUDENT_ID', 'MA_SV', 'ID'].includes(s));
-    return Array.from(new Set(tokens));
+    const lines = String(text || '')
+      .replace(/^\uFEFF/, '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (!lines.length) return [];
+
+    const splitCols = (line) => line.split(/[,;\t]/).map((c) => c.trim().replace(/^"|"$/g, ''));
+    const firstCols = splitCols(lines[0]).map((c) => c.toUpperCase());
+    let mssvCol = firstCols.findIndex((c) => ['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(c));
+    const hasHeader = mssvCol !== -1 || firstCols.includes('STT');
+    if (mssvCol === -1) {
+      mssvCol = firstCols[0] === 'STT' && firstCols.length > 1 ? 1 : 0;
+    }
+
+    const startRow = hasHeader ? 1 : 0;
+    const ids = [];
+    for (let i = startRow; i < lines.length; i++) {
+      const cols = splitCols(lines[i]);
+      const val = (cols[mssvCol] || '').trim().toUpperCase();
+      if (val && !['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(val)) {
+        ids.push(val);
+      }
+    }
+    return Array.from(new Set(ids));
   }
 
   function addIdsAndLookup(newIds) {
@@ -262,77 +279,32 @@
   }
 
   function renderPreviewStudents() {
-    const cntAll = importedStudents.length;
-    const cntFaceOk = importedStudents.filter((s) => s.exists && s.embeddingCreated).length;
-    const cntNoAcc = importedStudents.filter((s) => !s.exists).length;
-    const cntNoFace = importedStudents.filter((s) => s.exists && !s.embeddingCreated).length;
     const validCount = importedStudents.filter((s) => s.exists).length;
-
-    document.getElementById('previewTotalCount').textContent = cntAll;
-    document.getElementById('cntAll').textContent = cntAll;
-    document.getElementById('cntFaceOk').textContent = cntFaceOk;
-    document.getElementById('cntNoAcc').textContent = cntNoAcc;
-    document.getElementById('cntNoFace').textContent = cntNoFace;
     document.getElementById('validAssignCount').textContent = validCount;
-
-    const q = (document.getElementById('previewSearchInput').value || '').trim().toLowerCase();
-    const list = importedStudents.filter((st) => {
-      if (activeImportFilter === 'face_ok' && !(st.exists && st.embeddingCreated)) return false;
-      if (activeImportFilter === 'no_acc' && st.exists) return false;
-      if (activeImportFilter === 'no_face' && !(st.exists && !st.embeddingCreated)) return false;
-      if (q) {
-        return st.id.toLowerCase().includes(q) || (st.fullName || '').toLowerCase().includes(q);
-      }
-      return true;
-    });
-
-    const tbody = document.getElementById('previewTableBody');
-    if (!list.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#64748b;padding:24px">Chưa có sinh viên nào trong danh sách import. Hãy tải file .CSV hoặc dán MSSV ở trên.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = list
-      .map((st, idx) => {
-        const accBadge = st.exists
-          ? '<span class="pill-ok">● Đã có tài khoản</span>'
-          : '<span class="pill-err">● Không tìm thấy DB</span>';
-        const faceBadge = st.embeddingCreated
-          ? '<span class="pill-ok">● Đã đăng ký khuôn mặt</span>'
-          : '<span class="pill-warn">● Chưa có khuôn mặt</span>';
-        return `
-          <tr class="${st.exists ? '' : 'row-invalid'}">
-            <td style="font-family:var(--font-mono);color:#64748b">${String(idx + 1).padStart(2, '0')}</td>
-            <td style="font-weight:700;color:${st.exists ? '#f8fafc' : '#fb7185'}">${escapeHtml(st.fullName)}</td>
-            <td style="font-family:var(--font-mono);color:#38bdf8">${escapeHtml(st.id)}</td>
-            <td>${accBadge}</td>
-            <td>${faceBadge}</td>
-            <td style="text-align:right">
-              <button type="button" class="btn-card-delete" data-remove-sv="${escapeHtml(st.id)}" title="Xóa khỏi danh sách" style="width:28px;height:28px">✕</button>
-            </td>
-          </tr>
-        `;
-      })
-      .join('');
-
-    tbody.querySelectorAll('[data-remove-sv]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const sid = btn.getAttribute('data-remove-sv');
-        importedStudents = importedStudents.filter((s) => s.id !== sid);
-        renderPreviewStudents();
-      });
-    });
   }
 
   function handleCsvFile(file) {
     if (!file) return;
+    const box = document.getElementById('fileProgressBox');
+    box.style.display = 'block';
+    document.getElementById('fpFileName').textContent = `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`;
+
+    if (file.name.toLowerCase().endsWith('.xlsx')) {
+      document.getElementById('fpStatus').textContent = 'ĐANG ĐỌC FILE EXCEL...';
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = String(ev.target?.result || '');
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        postMsg({ action: 'parse_xlsx_students', base64 });
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result || '';
       const ids = extractStudentIdsFromText(content);
-      const box = document.getElementById('fileProgressBox');
-      box.style.display = 'block';
-      document.getElementById('fpFileName').textContent = `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`;
       document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${ids.length} MSSV`;
       addIdsAndLookup(ids);
     };
@@ -376,31 +348,6 @@
     URL.revokeObjectURL(url);
   });
 
-  document.getElementById('btnQuickAdd').addEventListener('click', () => {
-    const ta = document.getElementById('quickAddInput');
-    const ids = extractStudentIdsFromText(ta.value);
-    if (ids.length) {
-      addIdsAndLookup(ids);
-      ta.value = '';
-    }
-  });
-
-  document.getElementById('btnReverifyList').addEventListener('click', () => {
-    if (importedStudents.length) {
-      postMsg({ action: 'students_lookup', studentIds: importedStudents.map((s) => s.id) });
-    }
-  });
-
-  document.querySelectorAll('#importFilterTabs .ftab').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#importFilterTabs .ftab').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeImportFilter = btn.getAttribute('data-filter');
-      renderPreviewStudents();
-    });
-  });
-
-  document.getElementById('previewSearchInput').addEventListener('input', renderPreviewStudents);
   document.getElementById('btnCloseStudentsModal').addEventListener('click', () => studentsModal.classList.remove('open'));
   document.getElementById('btnRefreshHistory').addEventListener('click', () => postMsg({ action: 'dashboard_load_data' }));
   document.getElementById('btnLogout').addEventListener('click', () => postMsg({ action: 'logout' }));
@@ -475,10 +422,12 @@
 
   window.onStudentsLookup = function (res) {
     if (!res?.ok || !Array.isArray(res?.data)) {
-      showToast('Không thể kiểm tra danh sách sinh viên từ máy chủ.', 'error');
+      const detail = res?.data?.detail ? ` (${res.data.detail})` : '';
+      showToast(`Không thể kiểm tra danh sách sinh viên từ máy chủ${detail}.`, 'error');
       return;
     }
     importedStudents = res.data;
+    document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${importedStudents.length} MSSV`;
     renderPreviewStudents();
     showToast(`Đã kiểm tra ${importedStudents.length} sinh viên từ PostgreSQL.`);
   };
