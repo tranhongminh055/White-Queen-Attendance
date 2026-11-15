@@ -15,6 +15,8 @@ public sealed class MainForm : Form
     public MainForm()
     {
         Text = "SPACE X · White Queen Lecturer Desktop (.NET 10)";
+        FormBorderStyle = FormBorderStyle.None;
+        WindowState = FormWindowState.Maximized;
         Width = 1360;
         Height = 840;
         MinimumSize = new Size(1100, 700);
@@ -28,7 +30,11 @@ public sealed class MainForm : Form
         };
         Controls.Add(_webView);
 
-        Load += async (_, _) => await InitializeWebViewAsync();
+        Load += async (_, _) =>
+        {
+            _ = _apiClient.WarmUpAsync();
+            await InitializeWebViewAsync();
+        };
     }
 
     private async Task InitializeWebViewAsync()
@@ -52,6 +58,13 @@ public sealed class MainForm : Form
 
             _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            _webView.CoreWebView2.PermissionRequested += (_, e) =>
+            {
+                if (e.PermissionKind == CoreWebView2PermissionKind.Camera)
+                {
+                    e.State = CoreWebView2PermissionState.Allow;
+                }
+            };
             _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
 
             NavigateTo("landing/index.html");
@@ -92,6 +105,35 @@ public sealed class MainForm : Form
                 case "open_login":
                 case "start_attendance":
                     NavigateTo("login/index.html");
+                    break;
+
+                case "open_face_login":
+                    NavigateTo("face-login/index.html");
+                    break;
+
+                case "face_login_submit":
+                    var desc = Array.Empty<double>();
+                    if (doc.RootElement.TryGetProperty("descriptor", out var descEl) && descEl.ValueKind == JsonValueKind.Array)
+                    {
+                        desc = descEl.EnumerateArray().Select(x => x.GetDouble()).ToArray();
+                    }
+
+                    var faceResult = await _apiClient.FaceLoginLecturerAsync(desc, 0.62);
+                    if (faceResult.Matched && faceResult.Account is not null)
+                    {
+                        _currentLecturer = faceResult.Account;
+                    }
+
+                    var faceJson = JsonSerializer.Serialize(new
+                    {
+                        matched = faceResult.Matched,
+                        hasEnrolled = faceResult.HasEnrolled,
+                        distance = faceResult.Distance,
+                        confidence = faceResult.Confidence,
+                        message = faceResult.Message,
+                        account = faceResult.Account
+                    });
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onFaceLoginResult && window.onFaceLoginResult({faceJson})");
                     break;
 
                 case "open_dashboard":

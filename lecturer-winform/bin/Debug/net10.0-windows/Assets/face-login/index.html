@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPACE X · Xác thực khuôn mặt</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script defer src="./face-api.js"></script>
+</head>
+<body>
+  <div class="fl-page">
+    <header class="fl-topbar">
+      <div class="fl-brand">
+        <span class="fl-logo">SPACE <span class="fl-logo-x">X</span></span>
+        <span class="fl-brand-sub">BIOMETRIC AI</span>
+      </div>
+
+      <div class="fl-breadcrumb">
+        <span class="fl-bc-dim" id="bcLogin">ĐĂNG NHẬP</span>
+        <span class="fl-bc-sep">›</span>
+        <span class="fl-bc-active">XÁC THỰC KHUÔN MẶT</span>
+      </div>
+
+      <div class="fl-top-actions">
+        <span class="fl-status-pill" id="camStatusPill">
+          <i class="fl-dot"></i>
+          <span id="camStatusText">ĐANG KẾT NỐI</span>
+        </span>
+        <button type="button" class="fl-back-btn" id="btnBack">← QUAY LẠI</button>
+      </div>
+    </header>
+
+    <main class="fl-stage">
+      <section class="fl-left-col">
+        <div class="fl-viewport-frame" id="viewportFrame">
+          <span class="fl-corner tl"></span>
+          <span class="fl-corner tr"></span>
+          <span class="fl-corner bl"></span>
+          <span class="fl-corner br"></span>
+
+          <video id="faceVideo" autoplay playsinline muted class="fl-video"></video>
+          <canvas id="meshCanvas" class="fl-mesh-canvas"></canvas>
+          <div class="fl-grid-overlay"></div>
+
+          <div class="fl-reticle-wrap">
+            <div class="fl-oval-outer"></div>
+            <div class="fl-oval-inner"></div>
+          </div>
+
+          <div class="fl-scan-beam" id="scanBeam"></div>
+
+          <div class="fl-hud-top">
+            <div class="fl-rec-badge">
+              <i class="fl-rec-dot"></i>
+              <span id="recLabel">REC CAM_01 · 1080P · 30FPS</span>
+            </div>
+            <div class="fl-liveness-badge">🔒 LIVENESS: BẬT</div>
+          </div>
+
+          <div class="fl-scan-callout" id="scanCallout">
+            <i class="fl-callout-dot"></i>
+            <span>ĐANG QUÉT · 12.480 ĐIỂM</span>
+          </div>
+
+          <div class="fl-error-overlay" id="camErrorOverlay" hidden>
+            <div class="fl-err-icon">📷</div>
+            <p id="camErrorText">Không thể truy cập camera.</p>
+            <button type="button" class="fl-retry-cam" id="btnRetryCam">Thử kết nối lại</button>
+          </div>
+
+          <div class="fl-verified-banner" id="verifiedBanner" hidden>
+            <div class="fl-vb-check">✓</div>
+            <div>
+              <div class="fl-vb-title">XÁC THỰC THÀNH CÔNG</div>
+              <div class="fl-vb-name" id="verifiedName">Giảng viên</div>
+            </div>
+          </div>
+
+          <div class="fl-hud-bottom">
+            <div class="fl-match-box">
+              <div class="fl-mb-label">ĐỘ KHỚP</div>
+              <div class="fl-mb-row">
+                <span class="fl-mb-val" id="matchPctVal">0%</span>
+                <div class="fl-mb-bar"><div class="fl-mb-fill" id="matchPctFill"></div></div>
+              </div>
+            </div>
+
+            <div class="fl-prompt-pill">
+              <span class="fl-prompt-ico">◎</span>
+              <span id="statusPrompt">Đang khởi tạo camera &amp; mô hình AI...</span>
+            </div>
+
+            <div class="fl-clock-box" id="clockBox">--:--:--</div>
+          </div>
+        </div>
+
+        <div class="fl-controls-bar">
+          <div class="fl-ctrl-left">
+            <button type="button" class="fl-ctrl-btn" id="btnPause">⏸ Tạm dừng</button>
+            <button type="button" class="fl-ctrl-btn" id="btnSwitchCam">📷 Đổi camera</button>
+          </div>
+          <div class="fl-cam-indicators" id="camIndicators">
+            <span class="active">CAM_01</span><span>/</span><span>CAM_02</span><span>/</span><span>CAM_03</span>
+          </div>
+          <button type="button" class="fl-stop-btn" id="btnStopScan">■ Dừng quét</button>
+        </div>
+      </section>
+
+      <aside class="fl-right-col">
+        <div class="fl-panel-card">
+          <div class="fl-panel-eyebrow">XÁC THỰC SINH TRẮC HỌC</div>
+          <h1 class="fl-panel-title">Đăng nhập bằng khuôn mặt</h1>
+          <p class="fl-panel-desc">
+            Hệ thống đang đối chiếu khuôn mặt của bạn với dữ liệu Giảng viên đã đăng ký.
+            Vui lòng giữ nguyên vị trí trong khung quét.
+          </p>
+
+          <div class="fl-steps">
+            <div class="fl-step active" id="stepDetect">
+              <div class="fl-step-icon"><span class="fl-spin-ring"></span></div>
+              <div class="fl-step-body">
+                <div class="fl-step-name">Phát hiện khuôn mặt</div>
+                <div class="fl-step-meta" id="metaDetect">ĐANG TÌM KHUÔN MẶT...</div>
+              </div>
+            </div>
+
+            <div class="fl-step" id="stepLiveness">
+              <div class="fl-step-icon">•</div>
+              <div class="fl-step-body">
+                <div class="fl-step-name">Kiểm tra liveness</div>
+                <div class="fl-step-meta" id="metaLiveness">ĐANG CHỜ...</div>
+              </div>
+            </div>
+
+            <div class="fl-step" id="stepMatch">
+              <div class="fl-step-icon">•</div>
+              <div class="fl-step-body">
+                <div class="fl-step-head">
+                  <span class="fl-step-name">Đối chiếu dữ liệu</span>
+                  <span class="fl-step-pct" id="stepMatchPct">0%</span>
+                </div>
+                <div class="fl-step-bar"><div class="fl-step-bar-fill" id="stepMatchBar"></div></div>
+                <div class="fl-step-meta" id="metaMatch">ĐANG CHỜ...</div>
+              </div>
+            </div>
+
+            <div class="fl-step" id="stepSuccess">
+              <div class="fl-step-icon">✓</div>
+              <div class="fl-step-body">
+                <div class="fl-step-name">Xác thực thành công</div>
+                <div class="fl-step-meta" id="metaSuccess">ĐANG CHỜ</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="fl-metrics-box">
+            <div class="fl-metric-row">
+              <span class="fl-m-label">◎ ĐỘ CHÍNH XÁC</span>
+              <span class="fl-m-val cyan" id="accVal">--</span>
+            </div>
+            <div class="fl-m-bar"><div class="fl-m-fill" id="accBar"></div></div>
+
+            <div class="fl-metric-row">
+              <span class="fl-m-label">⚡ ĐỘ TRỄ</span>
+              <span class="fl-m-val" id="latencyVal">-- ms</span>
+            </div>
+            <div class="fl-m-bar"><div class="fl-m-fill subtle" id="latencyBar"></div></div>
+
+            <div class="fl-metric-row no-bar">
+              <span class="fl-m-label">▣ MODEL</span>
+              <span class="fl-m-val">FACENET-V3</span>
+            </div>
+          </div>
+
+          <div class="fl-tips-box">
+            <div class="fl-tips-title">⚠ LƯU Ý KHI QUÉT</div>
+            <ul>
+              <li>☀ Đảm bảo đủ ánh sáng</li>
+              <li>😷 Không đeo khẩu trang</li>
+              <li>🕶 Bỏ kính râm</li>
+            </ul>
+            <div class="fl-tips-help">? Không nhận diện được? Dùng mật khẩu để đăng nhập.</div>
+          </div>
+
+          <button type="button" class="fl-btn-primary" id="btnRestart">↻ BẮT ĐẦU QUÉT LẠI</button>
+          <button type="button" class="fl-btn-secondary" id="btnPasswordLogin">🔑 ĐĂNG NHẬP BẰNG MẬT KHẨU</button>
+
+          <div class="fl-sec-foot">🛡 DỮ LIỆU SINH TRẮC HỌC ĐƯỢC MÃ HÓA ĐẦU CUỐI</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
+

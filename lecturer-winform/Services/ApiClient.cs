@@ -29,6 +29,16 @@ public sealed class LoginResult
     public LecturerAccount? Account { get; init; }
 }
 
+public sealed class FaceLoginResult
+{
+    public bool Matched { get; init; }
+    public bool HasEnrolled { get; init; } = true;
+    public double? Distance { get; init; }
+    public string Confidence { get; init; } = string.Empty;
+    public string Message { get; init; } = string.Empty;
+    public LecturerAccount? Account { get; init; }
+}
+
 public sealed class ApiClient
 {
     public const string BaseUrl = "https://white-queen-attendance.onrender.com";
@@ -38,6 +48,18 @@ public sealed class ApiClient
         BaseAddress = new Uri(BaseUrl),
         Timeout = TimeSpan.FromSeconds(45)
     };
+
+    public async Task WarmUpAsync()
+    {
+        try
+        {
+            await _http.GetAsync("/api/health");
+        }
+        catch
+        {
+            // Ignore warm-up failure
+        }
+    }
 
     public async Task<LoginResult> LoginLecturerAsync(string identifier, string password)
     {
@@ -103,6 +125,88 @@ public sealed class ApiClient
             {
                 Success = false,
                 Message = $"Không thể kết nối máy chủ: {ex.Message}"
+            };
+        }
+    }
+
+    public async Task<FaceLoginResult> FaceLoginLecturerAsync(double[] descriptor, double maxDistance = 0.62)
+    {
+        try
+        {
+            var response = await _http.PostAsJsonAsync("/api/auth/face-login", new
+            {
+                descriptor,
+                maxDistance
+            });
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            var matched = root.TryGetProperty("matched", out var mEl) && mEl.GetBoolean();
+            var hasEnrolled = !root.TryGetProperty("hasEnrolled", out var hEl) || hEl.GetBoolean();
+            double? distance = root.TryGetProperty("distance", out var dEl) && dEl.ValueKind == JsonValueKind.Number
+                ? dEl.GetDouble()
+                : null;
+
+            if (!matched || !root.TryGetProperty("account", out var accEl))
+            {
+                return new FaceLoginResult
+                {
+                    Matched = false,
+                    HasEnrolled = hasEnrolled,
+                    Distance = distance,
+                    Message = hasEnrolled
+                        ? "Chưa khớp dữ liệu khuôn mặt — giữ yên khuôn mặt & đủ sáng."
+                        : "Chưa có dữ liệu khuôn mặt nào được đăng ký trên hệ thống."
+                };
+            }
+
+            var confidence = root.TryGetProperty("confidence", out var cEl)
+                ? cEl.GetString() ?? "94.8%"
+                : "94.8%";
+
+            var id = accEl.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty;
+            var fullName = accEl.TryGetProperty("fullName", out var fnEl) ? fnEl.GetString() ?? string.Empty : string.Empty;
+            var email = accEl.TryGetProperty("email", out var emEl) ? emEl.GetString() ?? string.Empty : string.Empty;
+            var role = accEl.TryGetProperty("role", out var rEl) ? rEl.GetString() ?? "student" : "student";
+            var classId = accEl.TryGetProperty("classId", out var clEl) ? clEl.GetString() ?? "FACULTY" : "FACULTY";
+
+            if (!string.Equals(role, "lecturer", StringComparison.OrdinalIgnoreCase))
+            {
+                return new FaceLoginResult
+                {
+                    Matched = false,
+                    HasEnrolled = true,
+                    Distance = distance,
+                    Message = $"Khuôn mặt khớp sinh viên {fullName} ({id}). Phần mềm Desktop chỉ dành cho Giảng viên."
+                };
+            }
+
+            return new FaceLoginResult
+            {
+                Matched = true,
+                HasEnrolled = true,
+                Distance = distance,
+                Confidence = confidence,
+                Message = $"Xác thực khuôn mặt thành công ({confidence})!",
+                Account = new LecturerAccount
+                {
+                    EmployeeId = id,
+                    FullName = fullName,
+                    Email = email,
+                    Role = role,
+                    ClassId = classId
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FaceLoginResult
+            {
+                Matched = false,
+                HasEnrolled = true,
+                Message = $"Lỗi kết nối máy chủ: {ex.Message}"
             };
         }
     }

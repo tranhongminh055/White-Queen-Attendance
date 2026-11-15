@@ -34,3 +34,13 @@ G:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\login\app.js
 G:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\login\index.html
 G:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\login\styles.css
 g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\dashboard\index.html
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\face-login\app.js
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\face-login\index.html
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\face-login\styles.css
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\face-login\face-api.js
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\face_landmark_68_model-weights_manifest.json
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\face_landmark_68_model.bin
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\face_recognition_model-weights_manifest.json
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\face_recognition_model.bin
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\tiny_face_detector_model-weights_manifest.json
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\tiny_face_detector_model.bin

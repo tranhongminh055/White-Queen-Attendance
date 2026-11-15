@@ -477,6 +477,51 @@ body.is-leaving .sx-login-shell {
   cursor: not-allowed;
 }
 
+.sx-or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  color: #64748b;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+}
+
+.sx-or-divider::before,
+.sx-or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sx-face-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sx-face-btn:hover {
+  border-color: var(--cyan);
+  background: rgba(0, 210, 255, 0.08);
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(0, 210, 255, 0.18);
+}
+
 .sx-card-foot {
   margin-top: 18px;
   padding-top: 14px;

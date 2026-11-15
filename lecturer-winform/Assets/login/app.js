@@ -6,6 +6,18 @@ const submitBtn = document.getElementById('btn-submit')
 const errorBox = document.getElementById('error-box')
 const togglePwBtn = document.getElementById('btn-toggle-pw')
 const backBtn = document.getElementById('btn-back-landing')
+const faceLoginBtn = document.getElementById('btn-face-login')
+
+if (faceLoginBtn) {
+  faceLoginBtn.addEventListener('click', () => {
+    document.body.classList.add('is-leaving')
+    setTimeout(() => {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage({ action: 'open_face_login' })
+      }
+    }, 240)
+  })
+}
 
 const rememberedId = localStorage.getItem('wq_lecturer_identifier')
 if (rememberedId) {
