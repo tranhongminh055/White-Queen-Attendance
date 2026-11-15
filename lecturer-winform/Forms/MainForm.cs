@@ -277,7 +277,9 @@ public sealed class MainForm : Form
                     var studentId = el.TryGetProperty("studentId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
                     var studentName = el.TryGetProperty("studentName", out var nEl) ? nEl.GetString() ?? string.Empty : string.Empty;
                     var classId = el.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
-                    var confidence = el.TryGetProperty("confidence", out var cfEl) ? cfEl.GetDouble() : 99.0;
+                    var confidence = el.TryGetProperty("confidence", out var cfEl)
+                        ? (cfEl.ValueKind == JsonValueKind.String ? cfEl.GetString() ?? "99.0%" : $"{cfEl.GetDouble():0.1}%")
+                        : "99.0%";
                     var avatar = el.TryGetProperty("avatar", out var aEl) && aEl.ValueKind == JsonValueKind.String ? aEl.GetString() : null;
                     var device = el.TryGetProperty("device", out var dvEl) ? dvEl.GetString() ?? "Lecturer Desktop AI" : "Lecturer Desktop AI";
                     var (ok, respJson) = await _apiClient.RecordAttendanceRawAsync(studentId, studentName, classId, confidence, avatar, device);

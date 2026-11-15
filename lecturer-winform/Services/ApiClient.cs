@@ -344,7 +344,7 @@ public sealed class ApiClient
         string studentId,
         string studentName,
         string classId,
-        double confidence,
+        string confidence,
         string? avatar,
         string device)
     {
