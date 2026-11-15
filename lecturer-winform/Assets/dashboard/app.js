@@ -254,7 +254,7 @@
     const ids = [];
     for (let i = startRow; i < lines.length; i++) {
       const cols = splitCols(lines[i]);
-      const val = (cols[mssvCol] || '').trim().toUpperCase();
+      const val = (cols[mssvCol] || '').replace(/[\x00-\x1f\x7f]+/g, '').trim().toUpperCase();
       if (val && !['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(val)) {
         ids.push(val);
       }
@@ -288,6 +288,12 @@
     const box = document.getElementById('fileProgressBox');
     box.style.display = 'block';
     document.getElementById('fpFileName').textContent = `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`;
+
+    if (file.name.toLowerCase().endsWith('.xls')) {
+      box.style.display = 'none';
+      showToast('Định dạng .xls cũ chưa được hỗ trợ, vui lòng lưu file dưới dạng .xlsx hoặc .csv.', 'error');
+      return;
+    }
 
     if (file.name.toLowerCase().endsWith('.xlsx')) {
       document.getElementById('fpStatus').textContent = 'ĐANG ĐỌC FILE EXCEL...';

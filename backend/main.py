@@ -935,7 +935,7 @@ def create_class(payload: CreateClassRequest):
         added_count = 0
         seen_ids: set[str] = set()
         for raw_sid in payload.studentIds:
-            sid = str(raw_sid or "").strip().upper()
+            sid = re.sub(r"[\x00-\x1f\x7f]+", "", str(raw_sid or "")).strip().upper()
             if not sid or sid in seen_ids:
                 continue
             seen_ids.add(sid)
@@ -1101,7 +1101,7 @@ def lookup_students(payload: LookupStudentsRequest):
     cleaned: list[str] = []
     seen: set[str] = set()
     for raw in payload.studentIds:
-        sid = str(raw or "").strip().upper()
+        sid = re.sub(r"[\x00-\x1f\x7f]+", "", str(raw or "")).strip().upper()
         if sid and sid not in seen:
             seen.add(sid)
             cleaned.append(sid)
