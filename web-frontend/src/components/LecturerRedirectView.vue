@@ -23,7 +23,7 @@ function handleGoEnroll() {
 
 function handleLogout() {
   sound.playBeep()
-  storage.clearCurrentProfile()
+  storage.setCurrentProfile(null)
   emit('notify', {
     type: 'info',
     message: 'Đã đăng xuất tài khoản Giảng viên.'
