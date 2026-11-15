@@ -173,7 +173,8 @@
       <!-- VIEW: ATTENDANCE HISTORY (STEP 1: SELECT CLASS - FIGMA 1:1) -->
       <section class="view-section" id="view-history">
         <div class="hist-breadcrumb-bar">
-          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span class="cyan-text">CHỌN LỚP</span> <span class="sep">/</span> CHỌN BUỔI <span class="sep">/</span> BẢNG ĐIỂM DANH</span>
+          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span class="cyan-text">CHỌN
+              LỚP</span> <span class="sep">/</span> CHỌN BUỔI <span class="sep">/</span> BẢNG ĐIỂM DANH</span>
           <button type="button" class="btn-secondary hist-refresh-btn" id="btnRefreshHistory">↻ Làm mới</button>
         </div>
 
@@ -252,6 +253,105 @@
 
         <!-- Classes Grid -->
         <div class="hist-classes-grid" id="historyClassesGrid"></div>
+      </section>
+
+      <!-- VIEW: ATTENDANCE HISTORY (STEP 2: SELECT SESSION - FIGMA 1:1) -->
+      <section class="view-section" id="view-history-sessions">
+        <div class="hist-breadcrumb-bar">
+          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span id="hsBreadCode">--</span> <span class="sep">/</span> <span class="cyan-text">CHỌN BUỔI</span> <span class="sep">/</span> BẢNG ĐIỂM DANH</span>
+          <button type="button" class="btn-secondary hist-refresh-btn" id="btnBackToHistoryClasses">← QUAY LẠI DANH SÁCH LỚP</button>
+        </div>
+
+        <header class="hs-header">
+          <div class="hs-header-left">
+            <div class="hist-step-kicker">
+              <span class="hist-kicker-line"></span>
+              <span>BƯỚC 2/3 · CHỌN BUỔI HỌC</span>
+              <span class="att-class-code" id="hsClassCode">--</span>
+            </div>
+            <h1 class="hist-title" id="hsClassTitle">--</h1>
+            <div class="att-class-meta" id="hsClassMeta">📅 -- · 📍 -- · 👥 0 SINH VIÊN</div>
+          </div>
+
+          <div class="hs-rating-card">
+            <div class="hist-ring-wrap hs-ring-lg">
+              <svg viewBox="0 0 44 44" class="hist-ring-svg">
+                <circle cx="22" cy="22" r="18" class="hist-ring-bg" />
+                <circle cx="22" cy="22" r="18" class="hist-ring-fg" id="hsRatingRing" stroke-dasharray="113.1" stroke-dashoffset="113.1" />
+              </svg>
+              <div class="hist-ring-text" id="hsRatingPct">0%</div>
+            </div>
+            <div>
+              <div class="hs-rating-kicker">CHUYÊN CẦN</div>
+              <div class="hs-rating-label" id="hsRatingLabel">Chưa có dữ liệu</div>
+              <div class="hs-rating-sem" id="hsRatingSem">--</div>
+            </div>
+          </div>
+        </header>
+
+        <!-- 4 KPI Cards -->
+        <div class="hist-kpi-grid">
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">ĐÃ DIỄN RA</div>
+            <div class="hist-kpi-val" id="hsKpiDone">0</div>
+            <div class="hist-kpi-sub">BUỔI HỌC</div>
+          </div>
+
+          <div class="hist-kpi-card hist-kpi-highlight">
+            <div class="hist-kpi-label cyan-text">CÓ MẶT TB</div>
+            <div class="hist-kpi-val cyan-text" id="hsKpiPresent">0%</div>
+            <div class="hist-kpi-progress">
+              <div class="hist-kpi-progress-fill" id="hsKpiPresentBar" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">ĐI TRỄ</div>
+            <div class="hist-kpi-val" id="hsKpiLate">0%</div>
+            <div class="hs-kpi-mini-line amber"></div>
+          </div>
+
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">VẮNG</div>
+            <div class="hist-kpi-val" id="hsKpiAbsent">0%</div>
+            <div class="hs-kpi-mini-line rose"></div>
+          </div>
+        </div>
+
+        <!-- 3-Step Stepper -->
+        <div class="hist-stepper">
+          <button type="button" class="hist-step done hs-step-btn" id="btnStep1Back">
+            <span class="hist-step-num">✓</span>
+            <span class="hist-step-label">CHỌN LỚP</span>
+          </button>
+          <span class="hist-step-line done"></span>
+          <div class="hist-step active">
+            <span class="hist-step-num">2</span>
+            <span class="hist-step-label">CHỌN BUỔI</span>
+          </div>
+          <span class="hist-step-line"></span>
+          <div class="hist-step">
+            <span class="hist-step-num">3</span>
+            <span class="hist-step-label">BẢNG ĐIỂM DANH</span>
+          </div>
+        </div>
+
+        <!-- Filter & Sort Bar -->
+        <div class="hs-toolbar">
+          <div class="hs-filter-pills">
+            <button type="button" class="hs-pill active" data-hs-filter="all" id="hsTabAll">TẤT CẢ · 0</button>
+            <button type="button" class="hs-pill" data-hs-filter="high" id="hsTabHigh">CHUYÊN CẦN ≥ 80%</button>
+          </div>
+          <select class="cc-select hs-sort-select" id="hsSortSelect">
+            <option value="newest">⇅ Mới nhất</option>
+            <option value="oldest">⇅ Cũ nhất</option>
+            <option value="rate_desc">⇅ Tỉ lệ cao nhất</option>
+            <option value="rate_asc">⇅ Tỉ lệ thấp nhất</option>
+          </select>
+        </div>
+
+        <!-- Sessions Grid -->
+        <div class="hist-classes-grid" id="historySessionsGrid"></div>
       </section>
 
       <!-- VIEW: EXPORT REPORT -->
@@ -442,7 +542,8 @@
         <div class="att-topbar">
           <div class="cc-breadcrumb-row" style="margin-bottom: 0;">
             <button type="button" class="btn-back-ghost" id="btnBackFromAttendance">← Quay lại</button>
-            <span class="cc-breadcrumb">LỚP HỌC <span class="sep">›</span> <span class="cyan-text">ĐIỂM DANH KHUÔN MẶT</span></span>
+            <span class="cc-breadcrumb">LỚP HỌC <span class="sep">›</span> <span class="cyan-text">ĐIỂM DANH KHUÔN
+                MẶT</span></span>
           </div>
 
           <div class="att-top-right">
@@ -503,7 +604,8 @@
               <!-- Placeholder when camera is stopped/loading -->
               <div class="att-cam-placeholder" id="attCamPlaceholder">
                 <div class="att-placeholder-ring"></div>
-                <div class="att-placeholder-text" id="attCamPlaceholderText">Đang khởi tạo AI Camera &amp; tải mô hình nhận diện...</div>
+                <div class="att-placeholder-text" id="attCamPlaceholderText">Đang khởi tạo AI Camera &amp; tải mô hình
+                  nhận diện...</div>
               </div>
 
               <!-- Bottom-Left Match Confidence Card -->
@@ -511,7 +613,9 @@
                 <div class="att-conf-label">ĐỘ KHỚP</div>
                 <div class="att-conf-row">
                   <span class="att-conf-val" id="attHudConfVal">--%</span>
-                  <div class="att-conf-track"><div class="att-conf-fill" id="attHudConfFill" style="width: 0%;"></div></div>
+                  <div class="att-conf-track">
+                    <div class="att-conf-fill" id="attHudConfFill" style="width: 0%;"></div>
+                  </div>
                 </div>
                 <div class="att-conf-sub" id="attHudConfSub">ĐANG CHỜ KHUÔN MẶT</div>
               </div>
@@ -577,8 +681,11 @@
               <div class="att-step active" id="attStep3">
                 <div class="att-step-node">◉</div>
                 <div class="att-step-info">
-                  <div class="att-step-name">Đối chiếu dữ liệu lớp <span class="cyan-text" id="attPipelinePct">0%</span></div>
-                  <div class="att-step-bar"><div class="att-step-bar-fill" id="attPipelineBar" style="width: 0%;"></div></div>
+                  <div class="att-step-name">Đối chiếu dữ liệu lớp <span class="cyan-text" id="attPipelinePct">0%</span>
+                  </div>
+                  <div class="att-step-bar">
+                    <div class="att-step-bar-fill" id="attPipelineBar" style="width: 0%;"></div>
+                  </div>
                   <div class="att-step-sub" id="attStep3Sub">ĐANG SO KHỚP HỒ SƠ SINH VIÊN</div>
                 </div>
               </div>
@@ -595,19 +702,28 @@
             <!-- Telemetry Metrics -->
             <div class="att-telemetry-box">
               <div class="att-tel-row">
-                <div class="att-tel-head"><span>◎ ĐỘ CHÍNH XÁC</span><strong class="cyan-text" id="attAccuracyVal">99.2%</strong></div>
-                <div class="att-tel-track"><div class="att-tel-fill" style="width: 96%;"></div></div>
+                <div class="att-tel-head"><span>◎ ĐỘ CHÍNH XÁC</span><strong class="cyan-text"
+                    id="attAccuracyVal">99.2%</strong></div>
+                <div class="att-tel-track">
+                  <div class="att-tel-fill" style="width: 96%;"></div>
+                </div>
               </div>
               <div class="att-tel-row">
-                <div class="att-tel-head"><span>⚡ ĐỘ TRỄ</span><strong class="emerald-text" id="attLatencyVal">-- ms</strong></div>
-                <div class="att-tel-track"><div class="att-tel-fill emerald" style="width: 35%;"></div></div>
+                <div class="att-tel-head"><span>⚡ ĐỘ TRỄ</span><strong class="emerald-text" id="attLatencyVal">--
+                    ms</strong></div>
+                <div class="att-tel-track">
+                  <div class="att-tel-fill emerald" style="width: 35%;"></div>
+                </div>
               </div>
               <div class="att-tel-row">
                 <div class="att-tel-head">
-                  <span>👥 TIẾN ĐỘ LỚP (<strong id="attKpiPresent">0</strong>/<strong id="attKpiTotal">0</strong> · Vắng <strong id="attKpiAbsent" style="color:#fb7185">0</strong>)</span>
+                  <span>👥 TIẾN ĐỘ LỚP (<strong id="attKpiPresent">0</strong>/<strong id="attKpiTotal">0</strong> · Vắng
+                    <strong id="attKpiAbsent" style="color:#fb7185">0</strong>)</span>
                   <strong class="cyan-text" id="attScanProgressLabel">0%</strong>
                 </div>
-                <div class="att-tel-track"><div class="att-tel-fill" id="attScanProgressFill" style="width: 0%;"></div></div>
+                <div class="att-tel-track">
+                  <div class="att-tel-fill" id="attScanProgressFill" style="width: 0%;"></div>
+                </div>
               </div>
             </div>
 
@@ -633,8 +749,10 @@
 
             <!-- Bottom Actions -->
             <div class="att-actions-bottom">
-              <button type="button" class="btn-primary-cyan att-btn-full" id="btnAttFinish">⏹ KẾT THÚC &amp; LƯU BUỔI ĐIỂM DANH</button>
-              <button type="button" class="btn-secondary att-btn-full" id="btnAttPauseBottom">⏸ TẠM DỪNG ĐIỂM DANH</button>
+              <button type="button" class="btn-primary-cyan att-btn-full" id="btnAttFinish">⏹ KẾT THÚC &amp; LƯU BUỔI
+                ĐIỂM DANH</button>
+              <button type="button" class="btn-secondary att-btn-full" id="btnAttPauseBottom">⏸ TẠM DỪNG ĐIỂM
+                DANH</button>
               <div class="att-security-note">🛡 DỮ LIỆU SINH TRẮC HỌC ĐƯỢC MÃ HÓA ĐẦU CUỐI</div>
             </div>
           </aside>

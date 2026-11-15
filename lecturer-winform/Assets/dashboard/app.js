@@ -67,7 +67,12 @@
 
     document.querySelectorAll('.nav-item').forEach((b) => {
       const v = b.getAttribute('data-view');
-      b.classList.toggle('active', v === viewName || ((viewName === 'create-class' || viewName === 'attendance') && v === 'classes'));
+      b.classList.toggle(
+        'active',
+        v === viewName ||
+          ((viewName === 'create-class' || viewName === 'attendance') && v === 'classes') ||
+          (viewName === 'history-sessions' && v === 'history')
+      );
     });
   }
 
@@ -307,15 +312,189 @@
     grid.querySelectorAll('[data-hist-class]').forEach((card) => {
       card.addEventListener('click', () => {
         const cid = card.getAttribute('data-hist-class');
-        selectedHistoryClassId = cid;
-        const cls = allClasses.find((c) => c.id === cid);
-        const sesCount = attendanceSessions.filter((s) => String(s.classId).toUpperCase() === String(cid).toUpperCase()).length;
-        grid.querySelectorAll('.hist-class-card').forEach((c) => c.classList.remove('selected'));
-        card.classList.add('selected');
-        showToast(`Đã chọn lớp ${cls ? cls.className : cid} (${sesCount} buổi đã điểm danh) — sẵn sàng Bước 2!`);
+        openHistorySessionsPage(cid);
       });
     });
   }
+
+  let hsFilter = 'all';
+  let hsSort = 'newest';
+  let selectedSessionId = null;
+
+  function formatDateVi(iso) {
+    if (!iso) return '--';
+    const parts = String(iso).split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return iso;
+  }
+
+  function openHistorySessionsPage(classId) {
+    selectedHistoryClassId = classId;
+    selectedSessionId = null;
+    hsFilter = 'all';
+    document.querySelectorAll('[data-hs-filter]').forEach((b) => b.classList.toggle('active', b.getAttribute('data-hs-filter') === 'all'));
+    switchView('history-sessions');
+    renderHistorySessions();
+  }
+
+  function renderHistorySessions() {
+    const cls = allClasses.find((c) => c.id === selectedHistoryClassId);
+    const grid = document.getElementById('historySessionsGrid');
+    if (!grid || !selectedHistoryClassId) return;
+
+    const code = cls ? cls.joinCode : selectedHistoryClassId;
+    document.getElementById('hsBreadCode').textContent = code;
+    document.getElementById('hsClassCode').textContent = code;
+    document.getElementById('hsClassTitle').textContent = cls ? cls.className : selectedHistoryClassId;
+    document.getElementById('hsClassMeta').innerHTML = `
+      <span>📅 ${escapeHtml(cls?.scheduleText || 'Chưa xếp lịch')}</span>
+      <span>·</span>
+      <span>📍 ${escapeHtml(cls?.roomText || 'Phòng học')}</span>
+      <span>·</span>
+      <span>👥 ${Number(cls?.totalStudents || 0)} SINH VIÊN</span>
+    `;
+    document.getElementById('hsRatingSem').textContent = cls?.semester || '';
+
+    const rawSessions = attendanceSessions
+      .filter((s) => String(s.classId).toUpperCase() === String(selectedHistoryClassId).toUpperCase());
+    const count = rawSessions.length;
+
+    let avgPresent = 0;
+    let avgLate = 0;
+    let avgAbsent = 0;
+    if (count > 0) {
+      let sumTot = 0;
+      let sumP = 0;
+      let sumL = 0;
+      let sumA = 0;
+      rawSessions.forEach((s) => {
+        const tot = Number(s.totalStudents || 0) || (Number(s.presentCount || 0) + Number(s.lateCount || 0) + Number(s.absentCount || 0));
+        sumTot += tot;
+        sumP += Number(s.presentCount || 0);
+        sumL += Number(s.lateCount || 0);
+        sumA += Number(s.absentCount || 0);
+      });
+      if (sumTot > 0) {
+        avgPresent = Math.round((sumP / sumTot) * 1000) / 10;
+        avgLate = Math.round((sumL / sumTot) * 1000) / 10;
+        avgAbsent = Math.round((sumA / sumTot) * 1000) / 10;
+      } else {
+        avgPresent = Math.round((rawSessions.reduce((a, b) => a + Number(b.attendanceRate || 0), 0) / count) * 10) / 10;
+        avgAbsent = Math.max(0, Math.round((100 - avgPresent) * 10) / 10);
+      }
+    }
+
+    document.getElementById('hsKpiDone').textContent = count;
+    document.getElementById('hsKpiPresent').textContent = `${avgPresent}%`;
+    document.getElementById('hsKpiPresentBar').style.width = `${Math.min(100, avgPresent)}%`;
+    document.getElementById('hsKpiLate').textContent = `${avgLate}%`;
+    document.getElementById('hsKpiAbsent').textContent = `${avgAbsent}%`;
+
+    const circ = 113.1;
+    document.getElementById('hsRatingRing').style.strokeDashoffset = circ - (circ * Math.min(100, avgPresent)) / 100;
+    document.getElementById('hsRatingPct').textContent = `${avgPresent}%`;
+    document.getElementById('hsRatingLabel').textContent =
+      count === 0 ? 'Chưa có buổi' : avgPresent >= 85 ? 'Rất tốt' : avgPresent >= 65 ? 'Khá ổn định' : 'Cần cải thiện';
+
+    document.getElementById('hsTabAll').textContent = `TẤT CẢ · ${count}`;
+
+    // Assign sequential session number (oldest = Buổi 01)
+    const chronological = [...rawSessions].reverse().map((s, i) => ({
+      ...s,
+      seqNum: i + 1,
+      isLatest: i === rawSessions.length - 1,
+    }));
+
+    let list = chronological.filter((s) => {
+      if (hsFilter === 'high') return Number(s.attendanceRate || 0) >= 80;
+      return true;
+    });
+
+    if (hsSort === 'newest') list.sort((a, b) => b.seqNum - a.seqNum);
+    else if (hsSort === 'oldest') list.sort((a, b) => a.seqNum - b.seqNum);
+    else if (hsSort === 'rate_desc') list.sort((a, b) => Number(b.attendanceRate || 0) - Number(a.attendanceRate || 0));
+    else if (hsSort === 'rate_asc') list.sort((a, b) => Number(a.attendanceRate || 0) - Number(b.attendanceRate || 0));
+
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Lớp này chưa có buổi điểm danh nào được lưu vào PostgreSQL. Hãy bấm "Mở điểm danh" và lưu buổi học đầu tiên!</div>';
+      return;
+    }
+
+    grid.innerHTML = list
+      .map((s, idx) => {
+        const tot = Math.max(1, Number(s.totalStudents || 0) || (Number(s.presentCount || 0) + Number(s.lateCount || 0) + Number(s.absentCount || 0)));
+        const pCnt = Number(s.presentCount || 0);
+        const lCnt = Number(s.lateCount || 0);
+        const aCnt = Number(s.absentCount || 0);
+        const pPct = (pCnt / tot) * 100;
+        const lPct = (lCnt / tot) * 100;
+        const aPct = (aCnt / tot) * 100;
+        const rate = Math.round(Number(s.attendanceRate || 0) * 10) / 10;
+        const numStr = String(s.seqNum).padStart(2, '0');
+        const isSel = selectedSessionId === s.id ? 'selected' : '';
+        const latestTag = s.isLatest ? '<span class="hs-latest-badge">MỚI NHẤT</span>' : '';
+
+        return `
+          <article class="hs-session-card ${isSel}" data-hs-session="${escapeHtml(s.id)}" style="animation-delay:${idx * 55}ms">
+            <div class="hs-card-head">
+              <div class="hs-session-num">
+                <span>BUỔI ${numStr}</span>
+                ${latestTag}
+              </div>
+              <div class="hs-session-time">${escapeHtml(formatDateVi(s.sessionDate))} · ${escapeHtml(s.startedAt || '')} - ${escapeHtml(s.endedAt || '')}</div>
+            </div>
+
+            <h3 class="hs-session-title">Buổi điểm danh #${numStr}</h3>
+
+            <div class="hs-session-counts">
+              <span class="hs-cnt-present">${pCnt} CÓ MẶT</span>
+              <span class="hs-cnt-late">${lCnt} TRỄ</span>
+              <span class="hs-cnt-absent">${aCnt} VẮNG</span>
+            </div>
+
+            <div class="hs-bar-row">
+              <div class="hs-multi-bar">
+                <div class="hs-seg-present" style="width:${pPct}%"></div>
+                <div class="hs-seg-late" style="width:${lPct}%"></div>
+                <div class="hs-seg-absent" style="width:${aPct}%"></div>
+              </div>
+              <span class="hs-bar-pct">${rate}%</span>
+            </div>
+
+            <div class="hs-card-cta">
+              <span>XEM BẢNG ĐIỂM DANH</span>
+              <span class="hist-card-arrow">→</span>
+            </div>
+          </article>
+        `;
+      })
+      .join('');
+
+    grid.querySelectorAll('[data-hs-session]').forEach((card) => {
+      card.addEventListener('click', () => {
+        const sid = card.getAttribute('data-hs-session');
+        selectedSessionId = sid;
+        grid.querySelectorAll('.hs-session-card').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        showToast('Đã chọn buổi học — sẵn sàng Bước 3: Bảng điểm danh chi tiết!');
+      });
+    });
+  }
+
+  document.getElementById('btnBackToHistoryClasses')?.addEventListener('click', () => switchView('history'));
+  document.getElementById('btnStep1Back')?.addEventListener('click', () => switchView('history'));
+  document.querySelectorAll('[data-hs-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-hs-filter]').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      hsFilter = btn.getAttribute('data-hs-filter') || 'all';
+      renderHistorySessions();
+    });
+  });
+  document.getElementById('hsSortSelect')?.addEventListener('change', (e) => {
+    hsSort = e.target.value || 'newest';
+    renderHistorySessions();
+  });
 
   // ===== DEDICATED CREATE CLASS PAGE =====
   function openCreateClassPage() {
