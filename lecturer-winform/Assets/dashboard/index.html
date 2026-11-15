@@ -170,32 +170,88 @@
         <div class="classes-grid" id="classesGrid"></div>
       </section>
 
-      <!-- VIEW: ATTENDANCE HISTORY -->
+      <!-- VIEW: ATTENDANCE HISTORY (STEP 1: SELECT CLASS - FIGMA 1:1) -->
       <section class="view-section" id="view-history">
-        <header class="topbar">
-          <div>
-            <div class="kicker">— NHẬT KÝ ĐIỂM DANH</div>
-            <h1 class="page-title">Lịch sử điểm danh</h1>
+        <div class="hist-breadcrumb-bar">
+          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span class="cyan-text">CHỌN LỚP</span> <span class="sep">/</span> CHỌN BUỔI <span class="sep">/</span> BẢNG ĐIỂM DANH</span>
+          <button type="button" class="btn-secondary hist-refresh-btn" id="btnRefreshHistory">↻ Làm mới</button>
+        </div>
+
+        <header class="hist-header">
+          <div class="hist-header-left">
+            <div class="hist-step-kicker">
+              <span class="hist-kicker-line"></span>
+              <span>STEP 1/3 · CHỌN LỚP HỌC</span>
+              <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+            </div>
+            <h1 class="hist-title">Lịch sử <span class="cyan-text">điểm danh</span></h1>
+            <p class="hist-subtitle">Chọn một lớp học phần để xem lại các buổi học và bảng điểm danh chi tiết.</p>
           </div>
-          <div class="topbar-actions">
-            <button type="button" class="btn-secondary" id="btnRefreshHistory">↻ Làm mới</button>
+
+          <div class="hist-header-controls">
+            <div class="search-box hist-search">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" id="historySearchInput" placeholder="Tìm lớp, mã lớp..." />
+            </div>
+
+            <select class="cc-select hist-semester-select" id="historySemesterFilter">
+              <option value="ALL">Tất cả học kỳ</option>
+            </select>
           </div>
         </header>
 
-        <div class="panel-box">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>MSSV</th>
-                <th>Họ tên sinh viên</th>
-                <th>Lớp học</th>
-                <th>Độ khớp</th>
-                <th>Thời gian</th>
-              </tr>
-            </thead>
-            <tbody id="historyTableBody"></tbody>
-          </table>
+        <!-- 4 KPI Overview Cards -->
+        <div class="hist-kpi-grid">
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">TỔNG SỐ LỚP</div>
+            <div class="hist-kpi-val" id="histKpiClasses">0</div>
+            <div class="hist-kpi-sub">ĐANG GIẢNG DẠY</div>
+          </div>
+
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">TỔNG BUỔI HỌC</div>
+            <div class="hist-kpi-val" id="histKpiSessions">0</div>
+            <div class="hist-kpi-sub">ĐÃ ĐIỂM DANH</div>
+          </div>
+
+          <div class="hist-kpi-card hist-kpi-highlight">
+            <div class="hist-kpi-label cyan-text">TỈ LỆ CÓ MẶT TB</div>
+            <div class="hist-kpi-val cyan-text" id="histKpiPresentRate">0%</div>
+            <div class="hist-kpi-progress">
+              <div class="hist-kpi-progress-fill" id="histKpiPresentBar" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">ĐI MUỘN / VẮNG</div>
+            <div class="hist-kpi-val" id="histKpiAbsentRate">0%</div>
+            <div class="hist-kpi-sub">TRUNG BÌNH</div>
+          </div>
         </div>
+
+        <!-- 3-Step Stepper -->
+        <div class="hist-stepper">
+          <div class="hist-step active">
+            <span class="hist-step-num">1</span>
+            <span class="hist-step-label">CHỌN LỚP</span>
+          </div>
+          <span class="hist-step-line"></span>
+          <div class="hist-step">
+            <span class="hist-step-num">2</span>
+            <span class="hist-step-label">CHỌN BUỔI</span>
+          </div>
+          <span class="hist-step-line"></span>
+          <div class="hist-step">
+            <span class="hist-step-num">3</span>
+            <span class="hist-step-label">BẢNG ĐIỂM DANH</span>
+          </div>
+        </div>
+
+        <!-- Classes Grid -->
+        <div class="hist-classes-grid" id="historyClassesGrid"></div>
       </section>
 
       <!-- VIEW: EXPORT REPORT -->

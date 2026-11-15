@@ -17,6 +17,8 @@
 
   let allClasses = [];
   let attendanceLogs = [];
+  let attendanceSessions = [];
+  let selectedHistoryClassId = null;
   let todaySessions = 0;
 
   // State for Dedicated Create Class Page
@@ -197,24 +199,122 @@
   }
 
   function renderHistory() {
-    const tbody = document.getElementById('historyTableBody');
-    if (!attendanceLogs.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#64748b;padding:28px">Chưa có lượt điểm danh nào được ghi nhận trên PostgreSQL.</td></tr>';
+    const semSelect = document.getElementById('historySemesterFilter');
+    const searchEl = document.getElementById('historySearchInput');
+    const grid = document.getElementById('historyClassesGrid');
+    if (!grid) return;
+
+    // Populate real semester options from lecturer's classes
+    if (semSelect) {
+      const currentVal = semSelect.value || 'ALL';
+      const semesters = Array.from(new Set(allClasses.map((c) => c.semester).filter(Boolean)));
+      semSelect.innerHTML = '<option value="ALL">Tất cả học kỳ</option>' +
+        semesters.map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      semSelect.value = semesters.includes(currentVal) ? currentVal : 'ALL';
+    }
+
+    const q = (searchEl?.value || '').trim().toLowerCase();
+    const sem = semSelect?.value || 'ALL';
+
+    const filteredClasses = allClasses.filter((cls) => {
+      if (sem !== 'ALL' && cls.semester !== sem) return false;
+      if (q) {
+        return (
+          (cls.className || '').toLowerCase().includes(q) ||
+          (cls.joinCode || '').toLowerCase().includes(q) ||
+          (cls.id || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+
+    // Compute real KPIs from allClasses & attendanceSessions
+    const totalClasses = allClasses.length;
+    const totalSessionsCount = attendanceSessions.length;
+    const avgRate = totalSessionsCount > 0
+      ? Math.round((attendanceSessions.reduce((s, x) => s + Number(x.attendanceRate || 0), 0) / totalSessionsCount) * 10) / 10
+      : 0;
+    const absentRate = totalSessionsCount > 0 ? Math.max(0, Math.round((100 - avgRate) * 10) / 10) : 0;
+
+    document.getElementById('histKpiClasses').textContent = totalClasses;
+    document.getElementById('histKpiSessions').textContent = totalSessionsCount;
+    document.getElementById('histKpiPresentRate').textContent = `${avgRate}%`;
+    document.getElementById('histKpiPresentBar').style.width = `${Math.min(100, avgRate)}%`;
+    document.getElementById('histKpiAbsentRate').textContent = `${absentRate}%`;
+
+    if (!filteredClasses.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Không có lớp học phù hợp bộ lọc.</div>';
       return;
     }
-    tbody.innerHTML = attendanceLogs
-      .map(
-        (log) => `
-        <tr>
-          <td style="font-family:var(--font-mono);color:#38bdf8">${escapeHtml(log.studentId)}</td>
-          <td>${escapeHtml(log.studentName)}</td>
-          <td>${escapeHtml(log.className || log.classId)}</td>
-          <td>${escapeHtml(log.confidence)}</td>
-          <td style="color:#94a3b8">${escapeHtml(log.timestamp)}</td>
-        </tr>
-      `
-      )
+
+    const circ = 113.1; // 2 * pi * 18
+    grid.innerHTML = filteredClasses
+      .map((cls, idx) => {
+        const clsSessions = attendanceSessions.filter((s) => String(s.classId).toUpperCase() === String(cls.id).toUpperCase());
+        const sesCount = clsSessions.length;
+        const clsAvg = sesCount > 0
+          ? Math.round((clsSessions.reduce((s, x) => s + Number(x.attendanceRate || 0), 0) / sesCount) * 10) / 10
+          : 0;
+        const dashOffset = circ - (circ * Math.min(100, clsAvg)) / 100;
+
+        // Build 12-slot mini bar chart (real sessions oldest -> newest on left)
+        const recent = clsSessions.slice(0, 12).reverse();
+        const barsHtml = Array.from({ length: 12 })
+          .map((_, bIdx) => {
+            const ses = recent[bIdx];
+            if (!ses) {
+              return '<div class="hist-bar-slot"><div class="hist-bar empty"></div></div>';
+            }
+            const hPct = Math.max(18, Math.min(100, Math.round(Number(ses.attendanceRate || 0))));
+            return `<div class="hist-bar-slot"><div class="hist-bar" style="height:${hPct}%;animation-delay:${bIdx * 35}ms" title="${escapeHtml(ses.sessionDate)}: ${ses.attendanceRate}%"></div></div>`;
+          })
+          .join('');
+
+        const isSel = selectedHistoryClassId === cls.id ? 'selected' : '';
+        return `
+          <article class="hist-class-card ${isSel}" data-hist-class="${escapeHtml(cls.id)}" style="animation-delay:${idx * 65}ms">
+            <div class="hist-card-top">
+              <div>
+                <div class="hist-card-code">${escapeHtml(cls.joinCode)}</div>
+                <h3 class="hist-card-name">${escapeHtml(cls.className)}</h3>
+                <div class="hist-card-schedule">${escapeHtml(cls.scheduleText || 'Chưa xếp lịch')} · ${escapeHtml(cls.roomText || 'Phòng học')}</div>
+              </div>
+              <div class="hist-ring-wrap">
+                <svg viewBox="0 0 44 44" class="hist-ring-svg">
+                  <circle cx="22" cy="22" r="18" class="hist-ring-bg" />
+                  <circle cx="22" cy="22" r="18" class="hist-ring-fg" stroke-dasharray="${circ}" stroke-dashoffset="${dashOffset}" />
+                </svg>
+                <div class="hist-ring-text">${sesCount > 0 ? `${clsAvg}%` : '0%'}</div>
+              </div>
+            </div>
+
+            <div class="hist-card-stats">
+              <span>👥 ${Number(cls.totalStudents || 0)} SV</span>
+              <span>📅 ${sesCount} buổi</span>
+            </div>
+
+            <div class="hist-mini-bars">${barsHtml}</div>
+
+            <div class="hist-card-footer">
+              <span>XEM CÁC BUỔI</span>
+              <span class="hist-card-arrow">→</span>
+            </div>
+          </article>
+        `;
+      })
       .join('');
+
+    grid.querySelectorAll('[data-hist-class]').forEach((card) => {
+      card.addEventListener('click', () => {
+        const cid = card.getAttribute('data-hist-class');
+        selectedHistoryClassId = cid;
+        const cls = allClasses.find((c) => c.id === cid);
+        const sesCount = attendanceSessions.filter((s) => String(s.classId).toUpperCase() === String(cid).toUpperCase()).length;
+        grid.querySelectorAll('.hist-class-card').forEach((c) => c.classList.remove('selected'));
+        card.classList.add('selected');
+        showToast(`Đã chọn lớp ${cls ? cls.className : cid} (${sesCount} buổi đã điểm danh) — sẵn sàng Bước 2!`);
+      });
+    });
   }
 
   // ===== DEDICATED CREATE CLASS PAGE =====
@@ -418,6 +518,7 @@
   window.onDashboardData = function (res) {
     allClasses = Array.isArray(res?.classes) ? res.classes : [];
     attendanceLogs = Array.isArray(res?.attendance?.logs) ? res.attendance.logs : [];
+    attendanceSessions = Array.isArray(res?.sessions) ? res.sessions : [];
     todaySessions = Number(res?.attendance?.todaySessions || 0);
 
     const totalStudents = allClasses.reduce((sum, c) => sum + (Number(c.totalStudents) || 0), 0);
@@ -1229,6 +1330,8 @@
   });
 
   document.getElementById('attSearchInput')?.addEventListener('input', renderAttendanceUI);
+  document.getElementById('historySearchInput')?.addEventListener('input', renderHistory);
+  document.getElementById('historySemesterFilter')?.addEventListener('change', renderHistory);
 
   renderLoadingSkeleton();
   postMsg({ action: 'dashboard_load_data' });

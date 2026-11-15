@@ -179,11 +179,13 @@ public sealed class MainForm : Form
 
                     var classesTask = _apiClient.GetLecturerClassesRawAsync(lecturerId);
                     var attTask = _apiClient.GetLecturerAttendanceRawAsync(lecturerId);
-                    await Task.WhenAll(classesTask, attTask);
+                    var sessionsTask = _apiClient.GetLecturerAttendanceSessionsRawAsync(lecturerId);
+                    await Task.WhenAll(classesTask, attTask, sessionsTask);
 
                     var (clsOk, clsJson) = classesTask.Result;
                     var (_, attJson) = attTask.Result;
-                    var payload = $"{{\"ok\":{(clsOk ? "true" : "false")},\"classes\":{(clsOk ? clsJson : "[]")},\"attendance\":{attJson}}}";
+                    var (_, sesJson) = sessionsTask.Result;
+                    var payload = $"{{\"ok\":{(clsOk ? "true" : "false")},\"classes\":{(clsOk ? clsJson : "[]")},\"attendance\":{attJson},\"sessions\":{sesJson}}}";
                     await _webView.CoreWebView2.ExecuteScriptAsync($"window.onDashboardData && window.onDashboardData({payload})");
                     break;
                 }
