@@ -116,50 +116,9 @@ function closeFaceLoginModal() {
   }
 }
 
-async function handleFaceLogin() {
+function handleFaceLogin() {
   sound.playBeep()
-  try {
-    const health = await storage.checkHealth()
-    if (!health?.counts?.faceEmbeddings) {
-      sound.playWarning()
-      emit('notify', {
-        type: 'warning',
-        message: 'Chưa có tài khoản nào đăng ký khuôn mặt trong SQL Server! Vui lòng đăng nhập bằng mật khẩu trước.'
-      })
-      return
-    }
-  } catch (err) {
-    sound.playWarning()
-    emit('notify', {
-      type: 'error',
-      message: `Không thể kết nối SQL Server API: ${err.message}`
-    })
-    return
-  }
-
-  showFaceModal.value = true
-  faceModalError.value = ''
-  faceModalStatus.value = 'Đang bật camera thật & tải mô hình AI...'
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
-      audio: false
-    })
-    if (!showFaceModal.value) {
-      stream.getTracks().forEach(t => t.stop())
-      return
-    }
-    if (faceVideoRef.value) {
-      faceVideoRef.value.srcObject = stream
-      await faceVideoRef.value.play().catch(() => {})
-    }
-    await faceEngine.loadModels()
-    faceModalStatus.value = 'Hãy nhìn thẳng vào camera để xác thực với SQL Server...'
-    runFaceLoginCheck()
-  } catch {
-    faceModalError.value = 'Không thể truy cập camera để đăng nhập bằng khuôn mặt.'
-  }
+  emit('navigate', 'face-login')
 }
 
 async function runFaceLoginCheck() {

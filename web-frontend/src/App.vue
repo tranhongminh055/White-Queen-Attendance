@@ -12,6 +12,8 @@ import LoginView from './components/LoginView.vue'
 import RegisterView from './components/RegisterView.vue'
 import StudentPortalIntroView from './components/StudentPortalIntroView.vue'
 import LecturerRedirectView from './components/LecturerRedirectView.vue'
+import FaceLoginView from './components/FaceLoginView.vue'
+import SpaceXLogo from './components/SpaceXLogo.vue'
 import { storage } from './utils/storage'
 import { sound } from './utils/sound'
 
@@ -192,7 +194,7 @@ onBeforeUnmount(() => {
 
     <!-- Show Top Nav on app screens, or custom nav on Landing/Auth/Intro/Enrollment -->
     <HeaderNav 
-      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
+      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-login' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
       :current-tab="currentTab" 
       :stats="globalStats"
       :can-back="canGoBack"
@@ -216,6 +218,14 @@ onBeforeUnmount(() => {
           v-else-if="currentTab === 'login'" 
           @navigate="handleTabChange"
           @back="handleGoBack('landing')"
+          @notify="addNotification"
+        />
+
+        <!-- SpaceX Biometric Face Login Page -->
+        <FaceLoginView
+          v-else-if="currentTab === 'face-login'"
+          @navigate="handleTabChange"
+          @back="handleGoBack('login')"
           @notify="addNotification"
         />
 
@@ -265,6 +275,29 @@ onBeforeUnmount(() => {
       </transition>
     </main>
 
+    <!-- Web App Footer (matching Landing Page sx-footer on all other pages) -->
+    <footer
+      v-if="currentTab !== 'landing'"
+      class="app-footer"
+    >
+      <div class="app-footer-inner">
+        <div class="app-footer-brand">
+          <SpaceXLogo @click="handleTabChange('landing')" />
+        </div>
+        <div class="app-footer-subtitle">BIOMETRIC FACE ATTENDANCE &amp; AI VISION SYSTEM</div>
+
+        <div class="app-footer-links">
+          <a href="#landing" @click.prevent="handleTabChange('landing')">HOME</a>
+          <a href="#scanner" @click.prevent="handleTabChange('scanner')">SCANNER</a>
+          <a href="#enrollment" @click.prevent="handleTabChange('enrollment')">ENROLLMENT</a>
+          <a href="#dashboard" @click.prevent="handleTabChange('dashboard')">DASHBOARD</a>
+          <a href="#login" @click.prevent="handleTabChange('login')">LOGIN</a>
+        </div>
+
+        <div class="app-footer-copy">© 2026 SPACEX BIOMETRIC VISION. ALL RIGHTS RESERVED.</div>
+      </div>
+    </footer>
+
     <!-- Settings Modal -->
     <SettingsModal 
       v-if="showSettings" 
@@ -274,7 +307,7 @@ onBeforeUnmount(() => {
 
     <!-- Cookie Banner (hidden on auth screens unless blocking redirect) -->
     <CookieBanner
-      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
+      v-if="currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-login' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
       :visible="showCookieBanner"
       :attention="cookieAttention"
       @accept="handleCookieAccept"
@@ -400,5 +433,62 @@ onBeforeUnmount(() => {
 .toast-leave-to {
   opacity: 0;
   transform: translateX(50px);
+}
+
+/* Global Web App Footer (matching FacEthicLanding sx-footer) */
+.app-footer {
+  background-color: #000000;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 64px 24px 48px;
+}
+
+.app-footer-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.app-footer-brand {
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.app-footer-subtitle {
+  font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.24em;
+  color: #475569;
+  margin-bottom: 30px;
+}
+
+.app-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px;
+  margin-bottom: 28px;
+}
+
+.app-footer-links a {
+  color: #64748b;
+  text-decoration: none;
+  font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  transition: color 0.2s ease;
+}
+
+.app-footer-links a:hover {
+  color: #ffffff;
+}
+
+.app-footer-copy {
+  font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  color: #334155;
 }
 </style>

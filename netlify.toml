@@ -3,12 +3,12 @@
   command = "npm run build"
   publish = "dist"
 
-# Optional same-origin API proxy (only needed if you do NOT set VITE_API_URL)
-# [[redirects]]
-#   from = "/api/*"
-#   to = "https://your-render-backend.onrender.com/api/:splat"
-#   status = 200
-#   force = true
+# Same-origin API proxy to Render backend (avoids CORS on Netlify preview URLs)
+[[redirects]]
+  from = "/api/*"
+  to = "https://white-queen-attendance.onrender.com/api/:splat"
+  status = 200
+  force = true
 
 [[headers]]
   for = "/assets/*"

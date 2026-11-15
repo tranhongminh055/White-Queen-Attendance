@@ -33,15 +33,24 @@ function normalizeApiBase(raw) {
 function getApiBase() {
   const settings = storage.getSettings()
   const configured = normalizeApiBase(settings.apiUrl || '')
+  const isNetlifyHost = typeof window !== 'undefined' && window.location.hostname.endsWith('.netlify.app')
   if (
     configured &&
     configured !== 'http://localhost:8000/api' &&
-    configured !== 'http://localhost:8080/api'
+    configured !== 'http://localhost:8080/api' &&
+    !(isNetlifyHost && configured === 'https://white-queen-attendance.onrender.com/api')
   ) {
     return configured
   }
   const envUrl = normalizeApiBase(import.meta.env?.VITE_API_URL || '')
-  return envUrl || '/api'
+  if (envUrl) return envUrl
+  if (typeof window !== 'undefined' && window.location.hostname.endsWith('.netlify.app')) {
+    return '/api'
+  }
+  if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return 'https://white-queen-attendance.onrender.com/api'
+  }
+  return '/api'
 }
 
 const COLD_START_STATUSES = new Set([502, 503, 504])
