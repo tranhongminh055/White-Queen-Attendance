@@ -39,6 +39,11 @@ function startFaceEnrollment() {
   emit('navigate', 'enrollment')
 }
 
+function openClassRegistration() {
+  sound.playBeep()
+  emit('navigate', 'classes')
+}
+
 function handleLogout() {
   sound.playBeep()
   storage.setCurrentProfile(null)
@@ -136,14 +141,20 @@ onMounted(async () => {
             Hệ thống sẽ ghi nhận khuôn mặt của bạn để tự động xác thực mỗi buổi học. Không cần thẻ, không cần chờ đợi — chỉ cần xuất hiện trước camera.
           </p>
 
-          <button type="button" class="sx-cta-btn" @click="startFaceEnrollment">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
-              <circle cx="12" cy="12" r="2.5"/>
-            </svg>
-            <span>{{ profile.isEnrolled ? 'Cập nhật gương mặt' : 'Đăng ký gương mặt' }}</span>
-            <span class="cta-arrow">→</span>
-          </button>
+          <div class="sx-hero-actions">
+            <button type="button" class="sx-cta-btn" @click="startFaceEnrollment">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <circle cx="12" cy="12" r="2.5"/>
+              </svg>
+              <span>{{ profile.isEnrolled ? 'Cập nhật gương mặt' : 'Đăng ký gương mặt' }}</span>
+              <span class="cta-arrow">→</span>
+            </button>
+
+            <button type="button" class="sx-cta-secondary-btn" @click="openClassRegistration">
+              <span>Đăng ký lớp học</span>
+            </button>
+          </div>
 
           <div class="sx-hero-meta">
             <span class="meta-item">
@@ -505,6 +516,13 @@ onMounted(async () => {
   color: #94a3b8;
 }
 
+.sx-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+}
+
 .sx-cta-btn {
   display: inline-flex;
   align-items: center;
@@ -530,6 +548,30 @@ onMounted(async () => {
 
 .cta-arrow {
   font-size: 1rem;
+}
+
+.sx-cta-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 26px;
+  background: rgba(2, 12, 20, 0.72);
+  color: #38bdf8;
+  border: 1px solid rgba(0, 229, 255, 0.48);
+  border-radius: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sx-cta-secondary-btn:hover {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: #00e5ff;
+  color: #e0f2fe;
+  transform: translateY(-1px);
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.22);
 }
 
 .sx-hero-meta {

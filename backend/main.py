@@ -155,6 +155,19 @@ class LegacyMigrateRequest(BaseModel):
     attendanceLogs: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class CreateClassRequest(BaseModel):
+    className: str = Field(..., min_length=2, max_length=160)
+    joinCode: str | None = Field(default=None, max_length=24)
+    semester: str = Field(default="HK1 2025-2026", max_length=64)
+    lecturerId: str = Field(..., min_length=2, max_length=32)
+    scheduleText: str = Field(default="", max_length=160)
+    roomText: str = Field(default="", max_length=80)
+
+
+class JoinClassRequest(BaseModel):
+    joinCode: str = Field(..., min_length=2, max_length=24)
+
+
 def validate_strong_password(password: str) -> str | None:
     if len(password) < 8:
         return "Mật khẩu phải có ít nhất 8 ký tự."
@@ -839,17 +852,218 @@ def face_login(payload: FaceLoginRequest):
         conn.close()
 
 
+def _format_class_row(row: tuple[Any, ...], total_students: int = 0) -> dict[str, Any]:
+    return {
+        "id": row[0],
+        "className": row[1],
+        "joinCode": row[2],
+        "semester": row[3],
+        "lecturerId": row[4],
+        "lecturerName": row[5],
+        "scheduleText": row[6] or "",
+        "roomText": row[7] or "",
+        "totalStudents": total_students,
+    }
+
+
 @app.get("/api/classes")
 def get_classes():
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT ClassId, COUNT(*) FROM StudentProfiles GROUP BY ClassId")
-        counts = {row[0]: row[1] for row in cur.fetchall()}
-        return [
-            {**cls, "totalStudents": counts.get(cls["id"], 0)}
-            for cls in DEFAULT_CLASSES
-        ]
+        cur.execute(
+            """
+            SELECT c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName,
+                   c.ScheduleText, c.RoomText, COUNT(m.Id) AS TotalStudents
+            FROM Classes c
+            LEFT JOIN ClassMembers m ON m.ClassId = c.Id
+            GROUP BY c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName, c.ScheduleText, c.RoomText, c.CreatedAt
+            ORDER BY c.CreatedAt DESC
+            """
+        )
+        return [_format_class_row(row, int(row[8] or 0)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+@app.post("/api/classes")
+def create_class(payload: CreateClassRequest):
+    lecturer_id = payload.lecturerId.strip().upper()
+    raw_code = (payload.joinCode or "").strip().upper()
+    join_code = raw_code if raw_code else f"WQ-{secrets.token_hex(2).upper()}"
+    class_id = join_code
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT EmployeeId, FullName, Role FROM Accounts WHERE UPPER(EmployeeId) = ?",
+            (lecturer_id,),
+        )
+        lecturer = cur.fetchone()
+        if not lecturer:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy tài khoản giảng viên {lecturer_id}.")
+        if str(lecturer[2] or "").lower() != "lecturer":
+            raise HTTPException(status_code=403, detail="Chỉ tài khoản Giảng viên mới có quyền tạo lớp học.")
+
+        cur.execute("SELECT Id FROM Classes WHERE UPPER(JoinCode) = ? OR UPPER(Id) = ?", (join_code, class_id))
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail=f"Mã lớp {join_code} đã tồn tại. Vui lòng chọn mã khác.")
+
+        cur.execute(
+            """
+            INSERT INTO Classes (Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                class_id,
+                payload.className.strip(),
+                join_code,
+                payload.semester.strip() or "HK1 2025-2026",
+                lecturer[0],
+                lecturer[1],
+                payload.scheduleText.strip(),
+                payload.roomText.strip(),
+            ),
+        )
+        conn.commit()
+        return {
+            "id": class_id,
+            "className": payload.className.strip(),
+            "joinCode": join_code,
+            "semester": payload.semester.strip() or "HK1 2025-2026",
+            "lecturerId": lecturer[0],
+            "lecturerName": lecturer[1],
+            "scheduleText": payload.scheduleText.strip(),
+            "roomText": payload.roomText.strip(),
+            "totalStudents": 0,
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/lecturers/{lecturer_id}/classes")
+def get_lecturer_classes(lecturer_id: str):
+    lid = lecturer_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName,
+                   c.ScheduleText, c.RoomText, COUNT(m.Id) AS TotalStudents
+            FROM Classes c
+            LEFT JOIN ClassMembers m ON m.ClassId = c.Id
+            WHERE UPPER(c.LecturerId) = ?
+            GROUP BY c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName, c.ScheduleText, c.RoomText, c.CreatedAt
+            ORDER BY c.CreatedAt DESC
+            """,
+            (lid,),
+        )
+        return [_format_class_row(row, int(row[8] or 0)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+@app.delete("/api/classes/{class_id}")
+def delete_class(class_id: str):
+    cid = class_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM Classes WHERE UPPER(Id) = ?", (cid,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Không tìm thấy lớp học để xóa.")
+        conn.commit()
+        return {"deleted": True, "id": cid}
+    finally:
+        conn.close()
+
+
+@app.get("/api/students/{student_id}/classes")
+def get_student_classes(student_id: str):
+    sid = student_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName,
+                   c.ScheduleText, c.RoomText,
+                   (SELECT COUNT(*) FROM ClassMembers cm WHERE cm.ClassId = c.Id) AS TotalStudents
+            FROM ClassMembers m
+            INNER JOIN Classes c ON c.Id = m.ClassId
+            WHERE UPPER(m.StudentId) = ?
+            ORDER BY m.JoinedAt DESC
+            """,
+            (sid,),
+        )
+        return [_format_class_row(row, int(row[8] or 0)) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+@app.post("/api/students/{student_id}/classes/join")
+def join_class_by_code(student_id: str, payload: JoinClassRequest):
+    sid = student_id.strip().upper()
+    code = payload.joinCode.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT EmployeeId FROM Accounts WHERE UPPER(EmployeeId) = ?", (sid,))
+        acc = cur.fetchone()
+        if not acc:
+            raise HTTPException(status_code=404, detail=f"Không tìm thấy tài khoản sinh viên {sid}.")
+
+        cur.execute(
+            """
+            SELECT Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText
+            FROM Classes
+            WHERE UPPER(JoinCode) = ? OR UPPER(Id) = ?
+            """,
+            (code, code),
+        )
+        cls_row = cur.fetchone()
+        if not cls_row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Không tìm thấy lớp học với mã '{code}'. Vui lòng kiểm tra lại mã từ giảng viên.",
+            )
+
+        cur.execute(
+            "SELECT Id FROM ClassMembers WHERE UPPER(ClassId) = ? AND UPPER(StudentId) = ?",
+            (cls_row[0].upper(), acc[0].upper()),
+        )
+        if cur.fetchone():
+            raise HTTPException(status_code=409, detail=f"Bạn đã tham gia lớp {cls_row[1]} ({cls_row[2]}) rồi.")
+
+        cur.execute(
+            "INSERT INTO ClassMembers (ClassId, StudentId) VALUES (?, ?)",
+            (cls_row[0], acc[0]),
+        )
+        cur.execute("SELECT COUNT(*) FROM ClassMembers WHERE ClassId = ?", (cls_row[0],))
+        total = int((cur.fetchone() or [0])[0])
+        conn.commit()
+        return _format_class_row(cls_row, total)
+    finally:
+        conn.close()
+
+
+@app.delete("/api/students/{student_id}/classes/{class_id}")
+def leave_class(student_id: str, class_id: str):
+    sid = student_id.strip().upper()
+    cid = class_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "DELETE FROM ClassMembers WHERE UPPER(StudentId) = ? AND UPPER(ClassId) = ?",
+            (sid, cid),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Bạn chưa tham gia lớp học này.")
+        conn.commit()
+        return {"left": True, "classId": cid}
     finally:
         conn.close()
 

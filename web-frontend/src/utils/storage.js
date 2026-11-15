@@ -291,5 +291,23 @@ export const storage = {
         maxDistance
       })
     })
+  },
+
+  async getStudentClasses(studentId) {
+    return apiRequest(`/students/${encodeURIComponent(studentId)}/classes`)
+  },
+
+  async joinClassByCode(studentId, joinCode) {
+    return apiRequest(`/students/${encodeURIComponent(studentId)}/classes/join`, {
+      method: 'POST',
+      body: JSON.stringify({ joinCode })
+    })
+  },
+
+  async leaveClass(studentId, classId) {
+    return apiRequest(
+      `/students/${encodeURIComponent(studentId)}/classes/${encodeURIComponent(classId)}`,
+      { method: 'DELETE' }
+    )
   }
 }

@@ -52,3 +52,28 @@ CREATE INDEX IF NOT EXISTS IX_StudentProfiles_ClassId ON StudentProfiles (ClassI
 CREATE INDEX IF NOT EXISTS IX_FaceEmbeddings_StudentId ON FaceEmbeddings (StudentId, Id);
 CREATE INDEX IF NOT EXISTS IX_AttendanceLogs_Class_Created ON AttendanceLogs (ClassId, CreatedAt DESC);
 
+CREATE TABLE IF NOT EXISTS Classes (
+    Id VARCHAR(40) NOT NULL PRIMARY KEY,
+    ClassName VARCHAR(160) NOT NULL,
+    JoinCode VARCHAR(24) NOT NULL UNIQUE,
+    Semester VARCHAR(64) NOT NULL DEFAULT 'HK1 2025-2026',
+    LecturerId VARCHAR(32) NOT NULL REFERENCES Accounts(EmployeeId) ON DELETE CASCADE,
+    LecturerName VARCHAR(120) NOT NULL,
+    ScheduleText VARCHAR(160) NOT NULL DEFAULT '',
+    RoomText VARCHAR(80) NOT NULL DEFAULT '',
+    CreatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ClassMembers (
+    Id SERIAL PRIMARY KEY,
+    ClassId VARCHAR(40) NOT NULL REFERENCES Classes(Id) ON DELETE CASCADE,
+    StudentId VARCHAR(32) NOT NULL REFERENCES Accounts(EmployeeId) ON DELETE CASCADE,
+    JoinedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT UQ_ClassMembers_Class_Student UNIQUE (ClassId, StudentId)
+);
+
+CREATE INDEX IF NOT EXISTS IX_Classes_JoinCode ON Classes (JoinCode);
+CREATE INDEX IF NOT EXISTS IX_Classes_LecturerId ON Classes (LecturerId);
+CREATE INDEX IF NOT EXISTS IX_ClassMembers_StudentId ON ClassMembers (StudentId);
+
+

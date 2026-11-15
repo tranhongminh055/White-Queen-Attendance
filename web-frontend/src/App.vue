@@ -11,6 +11,7 @@ import CookieBanner from './components/CookieBanner.vue'
 import LoginView from './components/LoginView.vue'
 import RegisterView from './components/RegisterView.vue'
 import StudentPortalIntroView from './components/StudentPortalIntroView.vue'
+import StudentClassesView from './components/StudentClassesView.vue'
 import LecturerRedirectView from './components/LecturerRedirectView.vue'
 import FaceLoginView from './components/FaceLoginView.vue'
 import SpaceXLogo from './components/SpaceXLogo.vue'
@@ -62,7 +63,7 @@ function handleCookieReject() {
   })
 }
 
-const protectedTabs = ['face-intro', 'scanner', 'enrollment', 'dashboard', 'lecturer-redirect']
+const protectedTabs = ['face-intro', 'classes', 'scanner', 'enrollment', 'dashboard', 'lecturer-redirect']
 
 function applyTab(tab, pushHistory = true) {
   if (tab !== 'landing' && !cookiesAccepted.value) {
@@ -195,7 +196,7 @@ onBeforeUnmount(() => {
 
     <!-- Show Top Nav on app screens, or custom nav on Landing/Auth/Intro/Enrollment -->
     <HeaderNav 
-      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-login' && currentTab !== 'face-intro' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
+      v-if="currentTab !== 'landing' && currentTab !== 'login' && currentTab !== 'register' && currentTab !== 'face-login' && currentTab !== 'face-intro' && currentTab !== 'classes' && currentTab !== 'enrollment' && currentTab !== 'lecturer-redirect'"
       :current-tab="currentTab" 
       :stats="globalStats"
       :can-back="canGoBack"
@@ -243,6 +244,14 @@ onBeforeUnmount(() => {
           v-else-if="currentTab === 'face-intro'"
           @navigate="handleTabChange"
           @back="handleGoBack('login')"
+          @notify="addNotification"
+        />
+
+        <!-- Student Class Registration Page -->
+        <StudentClassesView
+          v-else-if="currentTab === 'classes'"
+          @navigate="handleTabChange"
+          @back="handleGoBack('face-intro')"
           @notify="addNotification"
         />
 
