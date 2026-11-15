@@ -489,32 +489,363 @@
         </div>
       </section>
 
-      <!-- VIEW: EXPORT REPORT -->
+      <!-- VIEW: EXPORT REPORT (FIGMA 1:1) -->
       <section class="view-section" id="view-export">
-        <header class="topbar">
-          <div>
-            <div class="kicker">— BÁO CÁO CHUYÊN CẦN</div>
-            <h1 class="page-title">Xuất báo cáo</h1>
+        <div class="hist-breadcrumb-bar">
+          <span class="cc-breadcrumb">TRANG CHỦ <span class="sep">/</span> BÁO CÁO <span class="sep">/</span> <span class="cyan-text">XUẤT BÁO CÁO</span></span>
+          <span class="exp-live-badge"><span class="exp-live-dot"></span> ĐỒNG BỘ POSTGRESQL</span>
+        </div>
+
+        <header class="exp-hero-header">
+          <div class="exp-hero-left">
+            <div class="hist-step-kicker">
+              <span class="hist-kicker-line"></span>
+              <span>XUẤT BÁO CÁO</span>
+            </div>
+            <h1 class="hist-title">Xuất báo cáo <span class="cyan-text">điểm danh</span></h1>
+            <p class="hist-subtitle">Tổng hợp dữ liệu điểm danh của các lớp học phần theo thời gian thực. Tùy chỉnh bộ lọc và định dạng báo cáo bên dưới trước khi xuất hoặc in.</p>
+          </div>
+
+          <div class="exp-hero-kpis">
+            <div class="exp-mini-kpi">
+              <div class="exp-mini-label">TỔNG BUỔI HỌC</div>
+              <div class="exp-mini-val" id="expKpiSessions">0</div>
+              <div class="exp-mini-sub">ĐÃ ĐIỂM DANH</div>
+            </div>
+            <div class="exp-mini-kpi highlight">
+              <div class="exp-mini-label cyan-text">TỶ LỆ CÓ MẶT</div>
+              <div class="exp-mini-val cyan-text" id="expKpiRate">0%</div>
+              <div class="exp-mini-sub">TRUNG BÌNH TOÀN KỲ</div>
+            </div>
+            <div class="exp-mini-kpi">
+              <div class="exp-mini-label">SINH VIÊN</div>
+              <div class="exp-mini-val" id="expKpiStudents">0</div>
+              <div class="exp-mini-sub">ĐANG QUẢN LÝ</div>
+            </div>
           </div>
         </header>
 
-        <div class="export-card">
-          <div class="export-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="12" y1="18" x2="12" y2="12" />
-              <polyline points="9 15 12 18 15 15" />
-            </svg>
+        <!-- Main 2-column Config + Live Preview -->
+        <div class="exp-main-grid">
+          <!-- Left Config Column -->
+          <div class="exp-config-col">
+            <!-- 01: Chọn lớp học -->
+            <div class="exp-card" style="animation-delay:0ms">
+              <div class="exp-card-head">
+                <div class="exp-card-title-wrap">
+                  <span class="exp-step-badge">01</span>
+                  <h3>Chọn lớp học &amp; nhóm</h3>
+                </div>
+                <span class="exp-card-step-tag">BƯỚC 1/4</span>
+              </div>
+
+              <div class="exp-field-label">LỚP HỌC CHÍNH</div>
+              <select id="expClassSelect" class="exp-select">
+                <option value="ALL">Tất cả lớp học phần</option>
+              </select>
+
+              <div class="exp-chips-row" id="expClassChips"></div>
+            </div>
+
+            <!-- 02: Khoảng thời gian -->
+            <div class="exp-card" style="animation-delay:60ms">
+              <div class="exp-card-head">
+                <div class="exp-card-title-wrap">
+                  <span class="exp-step-badge">02</span>
+                  <h3>Khoảng thời gian</h3>
+                </div>
+                <span class="exp-card-step-tag">BƯỚC 2/4</span>
+              </div>
+
+              <div class="exp-preset-tabs">
+                <button type="button" class="exp-preset-btn" data-exp-range="week">Tuần này</button>
+                <button type="button" class="exp-preset-btn active" data-exp-range="month">Tháng này</button>
+                <button type="button" class="exp-preset-btn" data-exp-range="semester">Học kỳ</button>
+                <button type="button" class="exp-preset-btn" data-exp-range="custom">Tùy chọn</button>
+              </div>
+
+              <div class="exp-date-inputs-row">
+                <div class="exp-date-box">
+                  <label>TỪ NGÀY</label>
+                  <input type="date" id="expDateStart" />
+                </div>
+                <span class="exp-date-arrow">→</span>
+                <div class="exp-date-box">
+                  <label>ĐẾN NGÀY</label>
+                  <input type="date" id="expDateEnd" />
+                </div>
+                <div class="exp-range-summary" id="expRangeSummary">0 NGÀY · 0 BUỔI</div>
+              </div>
+
+              <div class="exp-calendars-grid">
+                <div class="exp-cal-box" id="expCalLeft"></div>
+                <div class="exp-cal-box" id="expCalRight"></div>
+              </div>
+            </div>
+
+            <!-- 03: Định dạng file -->
+            <div class="exp-card" style="animation-delay:120ms">
+              <div class="exp-card-head">
+                <div class="exp-card-title-wrap">
+                  <span class="exp-step-badge">03</span>
+                  <h3>Định dạng file</h3>
+                </div>
+                <span class="exp-card-step-tag">BƯỚC 3/4</span>
+              </div>
+
+              <div class="exp-format-grid">
+                <button type="button" class="exp-format-card" data-exp-format="pdf">
+                  <span class="exp-fmt-check">✓</span>
+                  <div class="exp-fmt-icon pdf">PDF</div>
+                  <div class="exp-fmt-name">PDF</div>
+                  <div class="exp-fmt-desc">Báo cáo in ấn chuẩn A4</div>
+                  <div class="exp-fmt-size" id="expSizePdf">~ 420 KB</div>
+                </button>
+                <button type="button" class="exp-format-card active" data-exp-format="excel">
+                  <span class="exp-fmt-check">✓</span>
+                  <div class="exp-fmt-icon excel">XLS</div>
+                  <div class="exp-fmt-name">Excel</div>
+                  <div class="exp-fmt-desc">Bảng tính UTF-8 BOM</div>
+                  <div class="exp-fmt-size" id="expSizeExcel">~ 18 KB</div>
+                </button>
+                <button type="button" class="exp-format-card" data-exp-format="csv">
+                  <span class="exp-fmt-check">✓</span>
+                  <div class="exp-fmt-icon csv">CSV</div>
+                  <div class="exp-fmt-name">CSV</div>
+                  <div class="exp-fmt-desc">Dữ liệu thô chuẩn hóa</div>
+                  <div class="exp-fmt-size" id="expSizeCsv">~ 14 KB</div>
+                </button>
+                <button type="button" class="exp-format-card" data-exp-format="json">
+                  <span class="exp-fmt-check">✓</span>
+                  <div class="exp-fmt-icon json">{}</div>
+                  <div class="exp-fmt-name">JSON</div>
+                  <div class="exp-fmt-desc">Cấu trúc dữ liệu API</div>
+                  <div class="exp-fmt-size" id="expSizeJson">~ 26 KB</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- 04: Nội dung báo cáo -->
+            <div class="exp-card" style="animation-delay:180ms">
+              <div class="exp-card-head">
+                <div class="exp-card-title-wrap">
+                  <span class="exp-step-badge">04</span>
+                  <h3>Nội dung báo cáo</h3>
+                </div>
+                <span class="exp-card-step-tag">BƯỚC 4/4</span>
+              </div>
+
+              <div class="exp-toggles-grid">
+                <label class="exp-toggle-item">
+                  <div class="exp-toggle-info">
+                    <div class="exp-toggle-title">Thông tin sinh viên</div>
+                    <div class="exp-toggle-sub">MSSV, họ tên, mã lớp</div>
+                  </div>
+                  <input type="checkbox" id="expOptStudents" checked />
+                  <span class="exp-switch"></span>
+                </label>
+
+                <label class="exp-toggle-item">
+                  <div class="exp-toggle-info">
+                    <div class="exp-toggle-title">Trạng thái điểm danh</div>
+                    <div class="exp-toggle-sub">Có mặt, đi trễ, vắng</div>
+                  </div>
+                  <input type="checkbox" id="expOptStatus" checked />
+                  <span class="exp-switch"></span>
+                </label>
+
+                <label class="exp-toggle-item">
+                  <div class="exp-toggle-info">
+                    <div class="exp-toggle-title">Nhật ký nhận diện AI</div>
+                    <div class="exp-toggle-sub">Độ khớp %, thiết bị</div>
+                  </div>
+                  <input type="checkbox" id="expOptConfidence" checked />
+                  <span class="exp-switch"></span>
+                </label>
+
+                <label class="exp-toggle-item">
+                  <div class="exp-toggle-info">
+                    <div class="exp-toggle-title">Lịch sử theo từng buổi</div>
+                    <div class="exp-toggle-sub">Chi tiết ngày &amp; khung giờ</div>
+                  </div>
+                  <input type="checkbox" id="expOptSessions" checked />
+                  <span class="exp-switch"></span>
+                </label>
+
+                <label class="exp-toggle-item">
+                  <div class="exp-toggle-info">
+                    <div class="exp-toggle-title">Biểu đồ thống kê</div>
+                    <div class="exp-toggle-sub">Tỷ lệ chuyên cần trực quan</div>
+                  </div>
+                  <input type="checkbox" id="expOptChart" checked />
+                  <span class="exp-switch"></span>
+                </label>
+
+                <label class="exp-toggle-item">
+                  <div class="exp-toggle-info">
+                    <div class="exp-toggle-title">Nhận xét &amp; ghi chú</div>
+                    <div class="exp-toggle-sub">Tổng kết đánh giá giảng viên</div>
+                  </div>
+                  <input type="checkbox" id="expOptNotes" />
+                  <span class="exp-switch"></span>
+                </label>
+              </div>
+            </div>
           </div>
-          <h2>Xuất file CSV / Excel dữ liệu điểm danh thật</h2>
-          <p>Hệ thống xuất toàn bộ danh sách lớp học và nhật ký điểm danh từ PostgreSQL (mở trực tiếp bằng Microsoft
-            Excel hỗ trợ tiếng Việt UTF-8).</p>
-          <div class="export-actions">
-            <button type="button" class="btn-primary-cyan" id="btnExportAttendanceCsv">⬇ Tải báo cáo điểm danh
-              (.CSV)</button>
-            <button type="button" class="btn-secondary" id="btnExportClassesCsv">⬇ Tải danh sách lớp học (.CSV)</button>
+
+          <!-- Right Sticky Preview Column -->
+          <aside class="exp-preview-col">
+            <div class="exp-preview-card">
+              <div class="exp-preview-head">
+                <span>XEM TRƯỚC BÁO CÁO</span>
+                <span class="exp-live-tag"><span class="exp-live-dot"></span> LIVE PREVIEW</span>
+              </div>
+
+              <div class="exp-paper-frame" id="expPaperFrame">
+                <div class="exp-paper-scan" id="expPaperScan"></div>
+                <div class="exp-paper-doc">
+                  <div class="exp-doc-top">
+                    <div>
+                      <div class="exp-doc-kicker">SPACE X BIOMETRIC · ATTENDANCE REPORT</div>
+                      <div class="exp-doc-title" id="expDocTitle">BÁO CÁO ĐIỂM DANH</div>
+                      <div class="exp-doc-meta" id="expDocMeta">Tất cả lớp học · --/--/----</div>
+                    </div>
+                    <div class="exp-doc-badge" id="expDocFmtBadge">EXCEL</div>
+                  </div>
+
+                  <table class="exp-doc-table">
+                    <thead>
+                      <tr>
+                        <th>MÃ / BUỔI</th>
+                        <th>NGÀY</th>
+                        <th>CÓ MẶT</th>
+                        <th>TỶ LỆ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="expPreviewBody"></tbody>
+                  </table>
+
+                  <div class="exp-doc-chart" id="expDocChartWrap">
+                    <div class="exp-doc-chart-label">BIỂU ĐỒ CHUYÊN CẦN (%)</div>
+                    <div class="exp-doc-bars" id="expPreviewBars"></div>
+                  </div>
+
+                  <div class="exp-doc-note" id="expDocNoteWrap" style="display:none">
+                    <strong>Ghi chú:</strong> Dữ liệu được trích xuất trực tiếp từ hệ thống điểm danh sinh trắc học AI PostgreSQL.
+                  </div>
+                </div>
+              </div>
+
+              <div class="exp-preview-stats">
+                <div class="exp-pstat">
+                  <span class="exp-pstat-lbl">BUỔI HỌC</span>
+                  <strong id="expPrevSessions">0</strong>
+                </div>
+                <div class="exp-pstat">
+                  <span class="exp-pstat-lbl">LƯỢT QUÉT</span>
+                  <strong id="expPrevLogs">0</strong>
+                </div>
+                <div class="exp-pstat">
+                  <span class="exp-pstat-lbl">ĐỊNH DẠNG</span>
+                  <strong id="expPrevFormat">EXCEL</strong>
+                </div>
+                <div class="exp-pstat">
+                  <span class="exp-pstat-lbl">TỶ LỆ TB</span>
+                  <strong class="cyan-text" id="expPrevRate">0%</strong>
+                </div>
+              </div>
+
+              <button type="button" class="btn-primary-cyan exp-cta-main" id="btnExpGenerate">
+                ⬇ XUẤT BÁO CÁO NGAY
+              </button>
+              <button type="button" class="btn-secondary exp-cta-sub" id="btnExpPrintPreview">
+                🖨 IN BÁO CÁO TRỰC TIẾP
+              </button>
+              <div class="exp-preview-hint" id="expPreviewHint">Sẵn sàng xuất dữ liệu thật từ PostgreSQL</div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Progress & Terminal Log Section -->
+        <div class="exp-section-kicker">
+          <span class="hist-kicker-line"></span>
+          <span>TIẾN TRÌNH XUẤT</span>
+        </div>
+
+        <div class="exp-pipeline-grid">
+          <div class="exp-pipeline-card">
+            <div class="exp-pipeline-top">
+              <div>
+                <div class="exp-pipeline-sub">TRẠNG THÁI HỆ THỐNG</div>
+                <h3 id="expPipelineStatus">Sẵn sàng tạo báo cáo...</h3>
+              </div>
+              <div class="exp-pipeline-pct" id="expPipelinePct">0%</div>
+            </div>
+
+            <div class="exp-progress-track">
+              <div class="exp-progress-fill" id="expProgressFill" style="width:0%"></div>
+            </div>
+
+            <div class="exp-pipeline-steps">
+              <div class="exp-pstep" data-exp-pstep="1">
+                <span class="exp-pstep-num">01</span>
+                <span>Thu thập dữ liệu</span>
+              </div>
+              <div class="exp-pstep" data-exp-pstep="2">
+                <span class="exp-pstep-num">02</span>
+                <span>Phân tích</span>
+              </div>
+              <div class="exp-pstep" data-exp-pstep="3">
+                <span class="exp-pstep-num">03</span>
+                <span>Dựng biểu đồ</span>
+              </div>
+              <div class="exp-pstep" data-exp-pstep="4">
+                <span class="exp-pstep-num">04</span>
+                <span>Đóng gói file</span>
+              </div>
+            </div>
           </div>
+
+          <div class="exp-terminal-card">
+            <div class="exp-terminal-bar">
+              <div class="exp-term-dots">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+              </div>
+              <span class="exp-term-title">EXPORT_ENGINE.LOG</span>
+            </div>
+            <div class="exp-terminal-body" id="expTerminalLog">
+              <div class="exp-log-line"><span class="log-ts">[READY]</span> Hệ thống xuất báo cáo đã kết nối PostgreSQL.</div>
+              <div class="exp-log-line"><span class="log-ts">[INFO]</span> Chọn lớp học, khoảng thời gian và định dạng để bắt đầu.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Reports Table -->
+        <div class="exp-section-kicker" style="margin-top:24px">
+          <span class="hist-kicker-line"></span>
+          <span>LỊCH SỬ</span>
+        </div>
+
+        <div class="exp-recent-head">
+          <h2>Báo cáo gần đây</h2>
+          <button type="button" class="btn-secondary exp-clear-recent" id="btnExpClearRecent">Xóa lịch sử</button>
+        </div>
+
+        <div class="hist-table-box hd-table-box">
+          <table class="hd-table">
+            <thead>
+              <tr>
+                <th>TÊN FILE</th>
+                <th>ĐỊNH DẠNG</th>
+                <th>SỐ BẢN GHI</th>
+                <th>THỜI GIAN TẠO</th>
+                <th style="text-align:right">THAO TÁC</th>
+              </tr>
+            </thead>
+            <tbody id="expRecentBody"></tbody>
+          </table>
         </div>
       </section>
 

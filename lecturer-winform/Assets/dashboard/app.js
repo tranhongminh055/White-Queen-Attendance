@@ -65,6 +65,9 @@
     const target = document.getElementById(`view-${viewName}`);
     if (target) target.classList.add('active');
 
+    if (viewName === 'export' && typeof renderExportPage === 'function') {
+      renderExportPage();
+    }
     document.querySelectorAll('.nav-item').forEach((b) => {
       const v = b.getAttribute('data-view');
       b.classList.toggle(
@@ -1018,18 +1021,593 @@
     URL.revokeObjectURL(url);
   }
 
-  document.getElementById('btnExportAttendanceCsv').addEventListener('click', () => {
-    const rows = [['MSSV', 'Ho ten', 'Ma lop', 'Ten lop', 'Do khop', 'Thoi gian']];
-    attendanceLogs.forEach((l) => rows.push([l.studentId, l.studentName, l.classId, l.className, l.confidence, l.timestamp]));
-    downloadCsv(`BaoCaoDiemDanh_${lecturerId}.csv`, rows);
-    showToast('Đã xuất báo cáo điểm danh CSV!');
+  // ── XUẤT BÁO CÁO ĐIỂM DANH (FIGMA 1:1 + ANIMATIONS + POSTGRESQL) ──
+  const expState = {
+    classId: 'ALL',
+    rangePreset: 'month',
+    startDate: '',
+    endDate: '',
+    calBaseDate: new Date(),
+    format: 'excel',
+    isGenerating: false,
+    recentReports: [],
+  };
+
+  function toIsoDate(d) {
+    const dt = d instanceof Date ? d : new Date(d);
+    if (Number.isNaN(dt.getTime())) return '';
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function applyExpRangePreset(preset) {
+    const now = new Date();
+    let start = new Date(now);
+    let end = new Date(now);
+    if (preset === 'week') {
+      const day = now.getDay() || 7;
+      start.setDate(now.getDate() - (day - 1));
+      end = new Date(start);
+      end.setDate(start.getDate() + 6);
+    } else if (preset === 'month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else if (preset === 'semester') {
+      start = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    } else {
+      return;
+    }
+    expState.startDate = toIsoDate(start);
+    expState.endDate = toIsoDate(end);
+    expState.calBaseDate = new Date(start.getFullYear(), start.getMonth(), 1);
+    const ds = document.getElementById('expDateStart');
+    const de = document.getElementById('expDateEnd');
+    if (ds) ds.value = expState.startDate;
+    if (de) de.value = expState.endDate;
+  }
+
+  function loadRecentReports() {
+    try {
+      const raw = localStorage.getItem(`wq_recent_reports_${lecturerId}`);
+      expState.recentReports = raw ? JSON.parse(raw) : [];
+    } catch {
+      expState.recentReports = [];
+    }
+  }
+
+  function saveRecentReport(entry) {
+    expState.recentReports = [entry, ...(expState.recentReports || [])].slice(0, 10);
+    try {
+      localStorage.setItem(`wq_recent_reports_${lecturerId}`, JSON.stringify(expState.recentReports));
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+
+  function getExpFilteredData() {
+    const clsFilter = expState.classId;
+    const sDate = expState.startDate || '0000-01-01';
+    const eDate = expState.endDate || '9999-12-31';
+
+    const sessions = (attendanceSessions || []).filter((s) => {
+      if (clsFilter !== 'ALL' && s.classId !== clsFilter && s.joinCode !== clsFilter) return false;
+      const sd = String(s.sessionDate || '').slice(0, 10);
+      if (sd && (sd < sDate || sd > eDate)) return false;
+      return true;
+    });
+
+    const logs = (attendanceLogs || []).filter((l) => {
+      if (clsFilter !== 'ALL' && l.classId !== clsFilter) return false;
+      const ld = String(l.timestamp || '').slice(0, 10);
+      if (ld && /^\d{4}-\d{2}-\d{2}$/.test(ld) && (ld < sDate || ld > eDate)) return false;
+      return true;
+    });
+
+    return { sessions, logs };
+  }
+
+  function triggerPreviewScan() {
+    const frame = document.getElementById('expPaperFrame');
+    if (!frame) return;
+    frame.classList.remove('scanning');
+    void frame.offsetWidth;
+    frame.classList.add('scanning');
+  }
+
+  function renderExpCalendars() {
+    const left = document.getElementById('expCalLeft');
+    const right = document.getElementById('expCalRight');
+    if (!left || !right) return;
+
+    const sessionDates = new Set(
+      (attendanceSessions || [])
+        .filter((s) => expState.classId === 'ALL' || s.classId === expState.classId)
+        .map((s) => String(s.sessionDate || '').slice(0, 10))
+    );
+
+    const renderOne = (container, year, month, showPrev, showNext) => {
+      const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+      const firstDay = new Date(year, month, 1).getDay();
+      const offset = firstDay === 0 ? 6 : firstDay - 1;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+      let cells = '';
+      for (let i = 0; i < offset; i++) {
+        cells += '<button type="button" class="exp-cal-day empty" disabled></button>';
+      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const isEdge = iso === expState.startDate || iso === expState.endDate;
+        const inRange = expState.startDate && expState.endDate && iso >= expState.startDate && iso <= expState.endDate;
+        const hasSess = sessionDates.has(iso);
+        const cls = ['exp-cal-day', inRange ? 'in-range' : '', isEdge ? 'edge' : '', hasSess ? 'has-session' : '']
+          .filter(Boolean)
+          .join(' ');
+        cells += `<button type="button" class="${cls}" data-exp-calday="${iso}">${d}</button>`;
+      }
+
+      container.innerHTML = `
+        <div class="exp-cal-header">
+          ${showPrev ? '<button type="button" class="exp-cal-nav" id="expCalPrev">‹</button>' : '<span></span>'}
+          <span>${monthNames[month]} · ${year}</span>
+          ${showNext ? '<button type="button" class="exp-cal-nav" id="expCalNext">›</button>' : '<span></span>'}
+        </div>
+        <div class="exp-cal-weekdays">
+          <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span>
+        </div>
+        <div class="exp-cal-days">${cells}</div>
+      `;
+    };
+
+    const y1 = expState.calBaseDate.getFullYear();
+    const m1 = expState.calBaseDate.getMonth();
+    const nextDt = new Date(y1, m1 + 1, 1);
+    renderOne(left, y1, m1, true, false);
+    renderOne(right, nextDt.getFullYear(), nextDt.getMonth(), false, true);
+
+    document.getElementById('expCalPrev')?.addEventListener('click', () => {
+      expState.calBaseDate = new Date(y1, m1 - 1, 1);
+      renderExpCalendars();
+    });
+    document.getElementById('expCalNext')?.addEventListener('click', () => {
+      expState.calBaseDate = new Date(y1, m1 + 1, 1);
+      renderExpCalendars();
+    });
+
+    [left, right].forEach((box) => {
+      box.querySelectorAll('[data-exp-calday]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const picked = btn.getAttribute('data-exp-calday');
+          if (!picked) return;
+          if (!expState.startDate || (expState.startDate && expState.endDate && expState.startDate !== expState.endDate)) {
+            expState.startDate = picked;
+            expState.endDate = picked;
+          } else if (picked < expState.startDate) {
+            expState.endDate = expState.startDate;
+            expState.startDate = picked;
+          } else {
+            expState.endDate = picked;
+          }
+          expState.rangePreset = 'custom';
+          document.querySelectorAll('[data-exp-range]').forEach((b) => {
+            b.classList.toggle('active', b.getAttribute('data-exp-range') === 'custom');
+          });
+          const ds = document.getElementById('expDateStart');
+          const de = document.getElementById('expDateEnd');
+          if (ds) ds.value = expState.startDate;
+          if (de) de.value = expState.endDate;
+          renderExpCalendars();
+          renderExpPreview(true);
+        });
+      });
+    });
+  }
+
+  function renderExpPreview(withScan = false) {
+    if (withScan) triggerPreviewScan();
+    const { sessions, logs } = getExpFilteredData();
+
+    const startD = expState.startDate ? new Date(expState.startDate) : null;
+    const endD = expState.endDate ? new Date(expState.endDate) : null;
+    const diffDays = startD && endD ? Math.max(1, Math.round((endD - startD) / 86400000) + 1) : 0;
+    const summaryEl = document.getElementById('expRangeSummary');
+    if (summaryEl) summaryEl.textContent = `${diffDays} NGÀY · ${sessions.length} BUỔI`;
+
+    const clsObj = (allClasses || []).find((c) => c.id === expState.classId || c.joinCode === expState.classId);
+    const titleEl = document.getElementById('expDocTitle');
+    const metaEl = document.getElementById('expDocMeta');
+    const badgeEl = document.getElementById('expDocFmtBadge');
+    if (titleEl) titleEl.textContent = clsObj ? `BÁO CÁO · ${clsObj.className}` : 'BÁO CÁO ĐIỂM DANH TỔNG HỢP';
+    if (metaEl) metaEl.textContent = `${formatDateVi(expState.startDate)} → ${formatDateVi(expState.endDate)}`;
+    if (badgeEl) badgeEl.textContent = expState.format.toUpperCase();
+
+    const tbody = document.getElementById('expPreviewBody');
+    if (tbody) {
+      if (sessions.length) {
+        tbody.innerHTML = sessions
+          .slice(0, 5)
+          .map((s) => {
+            const rate = Math.round(Number(s.attendanceRate || 0) * 10) / 10;
+            return `
+              <tr>
+                <td><strong>${escapeHtml(s.classId || '—')}</strong></td>
+                <td>${escapeHtml(formatDateVi(s.sessionDate))}</td>
+                <td>${Number(s.presentCount || 0)}/${Number(s.totalStudents || 0)}</td>
+                <td style="color:#0284c7;font-weight:700">${rate}%</td>
+              </tr>
+            `;
+          })
+          .join('');
+      } else if (logs.length) {
+        tbody.innerHTML = logs
+          .slice(0, 5)
+          .map((l) => `
+            <tr>
+              <td><strong>${escapeHtml(l.studentId || '—')}</strong></td>
+              <td>${escapeHtml(String(l.timestamp || '').slice(0, 10))}</td>
+              <td>${escapeHtml(l.classId || '—')}</td>
+              <td style="color:#0284c7;font-weight:700">${escapeHtml(l.confidence || '—')}</td>
+            </tr>
+          `)
+          .join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#64748b;padding:10px 0">Không có buổi điểm danh trong khoảng thời gian đã chọn.</td></tr>';
+      }
+    }
+
+    const showChart = document.getElementById('expOptChart')?.checked !== false;
+    const chartWrap = document.getElementById('expDocChartWrap');
+    const barsEl = document.getElementById('expPreviewBars');
+    if (chartWrap) chartWrap.style.display = showChart ? 'block' : 'none';
+    if (barsEl && showChart) {
+      const sample = sessions.slice(0, 8);
+      if (sample.length) {
+        barsEl.innerHTML = sample
+          .map((s) => {
+            const h = Math.max(8, Math.min(100, Number(s.attendanceRate || 0)));
+            return `<div class="exp-doc-bar" style="height:${h}%" title="${escapeHtml(s.classId)} · ${h}%"></div>`;
+          })
+          .join('');
+      } else {
+        barsEl.innerHTML = '<div style="font-size:0.62rem;color:#64748b;margin:auto">Chưa có dữ liệu biểu đồ</div>';
+      }
+    }
+
+    const showNotes = !!document.getElementById('expOptNotes')?.checked;
+    const noteWrap = document.getElementById('expDocNoteWrap');
+    if (noteWrap) noteWrap.style.display = showNotes ? 'block' : 'none';
+
+    const avgRate = sessions.length
+      ? Math.round((sessions.reduce((acc, s) => acc + Number(s.attendanceRate || 0), 0) / sessions.length) * 10) / 10
+      : 0;
+
+    const setTxt = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = v;
+    };
+    setTxt('expPrevSessions', String(sessions.length));
+    setTxt('expPrevLogs', String(logs.length));
+    setTxt('expPrevFormat', expState.format.toUpperCase());
+    setTxt('expPrevRate', `${avgRate}%`);
+
+    const approxRows = Math.max(1, sessions.length + logs.length);
+    setTxt('expSizePdf', `~ ${Math.max(120, approxRows * 14)} KB`);
+    setTxt('expSizeExcel', `~ ${Math.max(4, Math.ceil(approxRows * 0.45))} KB`);
+    setTxt('expSizeCsv', `~ ${Math.max(3, Math.ceil(approxRows * 0.35))} KB`);
+    setTxt('expSizeJson', `~ ${Math.max(6, Math.ceil(approxRows * 0.75))} KB`);
+  }
+
+  function renderRecentReports() {
+    const tbody = document.getElementById('expRecentBody');
+    if (!tbody) return;
+    if (!expState.recentReports.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="hd-empty-cell">Chưa có báo cáo nào được xuất trong phiên làm việc này.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = expState.recentReports
+      .map((r, idx) => `
+        <tr class="hd-row" style="animation-delay:${idx * 35}ms">
+          <td><strong>${escapeHtml(r.filename)}</strong></td>
+          <td><span class="hd-status-badge present">${escapeHtml(r.format.toUpperCase())}</span></td>
+          <td class="hd-mssv">${Number(r.records || 0)} bản ghi</td>
+          <td class="hd-time">${escapeHtml(r.createdAt)}</td>
+          <td style="text-align:right">
+            <button type="button" class="btn-secondary" style="padding:5px 12px;font-size:0.74rem" data-exp-redownload="${idx}">⬇ Tải lại</button>
+          </td>
+        </tr>
+      `)
+      .join('');
+
+    tbody.querySelectorAll('[data-exp-redownload]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = Number(btn.getAttribute('data-exp-redownload'));
+        const item = expState.recentReports[idx];
+        if (!item) return;
+        if (item.format === 'pdf') {
+          window.print();
+          return;
+        }
+        const blob = new Blob([item.content], { type: item.mime || 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = item.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Đã tải lại ${item.filename}`);
+      });
+    });
+  }
+
+  function renderExportPage() {
+    if (!expState.startDate || !expState.endDate) {
+      applyExpRangePreset(expState.rangePreset);
+    }
+    loadRecentReports();
+
+    const totalSessions = (attendanceSessions || []).length;
+    const totalStudents = (allClasses || []).reduce((sum, c) => sum + (Number(c.totalStudents) || 0), 0);
+    const avgRate = totalSessions
+      ? Math.round(((attendanceSessions || []).reduce((s, x) => s + Number(x.attendanceRate || 0), 0) / totalSessions) * 10) / 10
+      : 0;
+
+    const kpiSess = document.getElementById('expKpiSessions');
+    const kpiStu = document.getElementById('expKpiStudents');
+    const kpiRate = document.getElementById('expKpiRate');
+    if (kpiSess) animateValue(kpiSess, totalSessions);
+    if (kpiStu) animateValue(kpiStu, totalStudents);
+    if (kpiRate) kpiRate.textContent = `${avgRate}%`;
+
+    const sel = document.getElementById('expClassSelect');
+    const chips = document.getElementById('expClassChips');
+    if (sel) {
+      const prev = expState.classId;
+      sel.innerHTML =
+        '<option value="ALL">Tất cả lớp học phần (' + (allClasses || []).length + ' lớp)</option>' +
+        (allClasses || [])
+          .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.joinCode)} · ${escapeHtml(c.className)} (${Number(c.totalStudents || 0)} SV)</option>`)
+          .join('');
+      sel.value = prev;
+    }
+    if (chips) {
+      const list = [{ id: 'ALL', label: 'Tất cả lớp' }].concat(
+        (allClasses || []).map((c) => ({ id: c.id, label: `${c.joinCode} · ${c.className}` }))
+      );
+      chips.innerHTML = list
+        .map((c) => `<button type="button" class="exp-chip ${expState.classId === c.id ? 'active' : ''}" data-exp-chip="${escapeHtml(c.id)}">${expState.classId === c.id ? '✓ ' : ''}${escapeHtml(c.label)}</button>`)
+        .join('');
+
+      chips.querySelectorAll('[data-exp-chip]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          expState.classId = btn.getAttribute('data-exp-chip') || 'ALL';
+          if (sel) sel.value = expState.classId;
+          renderExportPage();
+          triggerPreviewScan();
+        });
+      });
+    }
+
+    renderExpCalendars();
+    renderExpPreview(false);
+    renderRecentReports();
+  }
+
+  function appendExpLog(tag, msg, ok = false) {
+    const body = document.getElementById('expTerminalLog');
+    if (!body) return;
+    const line = document.createElement('div');
+    line.className = `exp-log-line${ok ? ' ok' : ''}`;
+    line.innerHTML = `<span class="log-ts">[${escapeHtml(tag)}]</span> ${escapeHtml(msg)}`;
+    body.appendChild(line);
+    body.scrollTop = body.scrollHeight;
+  }
+
+  function buildExportFilePayload() {
+    const { sessions, logs } = getExpFilteredData();
+    const incStudents = document.getElementById('expOptStudents')?.checked !== false;
+    const incStatus = document.getElementById('expOptStatus')?.checked !== false;
+    const incConf = document.getElementById('expOptConfidence')?.checked !== false;
+    const incSessions = document.getElementById('expOptSessions')?.checked !== false;
+
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const clsTag = expState.classId === 'ALL' ? 'TatCaLop' : expState.classId;
+
+    if (expState.format === 'json') {
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        lecturerId,
+        classFilter: expState.classId,
+        dateRange: { start: expState.startDate, end: expState.endDate },
+        sessions: incSessions ? sessions : [],
+        logs: incStudents ? logs : [],
+      };
+      return {
+        filename: `BaoCaoDiemDanh_${clsTag}_${stamp}.json`,
+        mime: 'application/json;charset=utf-8;',
+        content: JSON.stringify(payload, null, 2),
+        records: sessions.length + logs.length,
+      };
+    }
+
+    const headers = ['Loai', 'Ma lop'];
+    if (incSessions) headers.push('Ngay', 'Khung gio');
+    if (incStudents) headers.push('MSSV', 'Ho ten');
+    if (incStatus) headers.push('Trang thai / Ty le');
+    if (incConf) headers.push('Do khop / Ghi nhan');
+
+    const rows = [headers];
+    if (incSessions) {
+      sessions.forEach((s) => {
+        const row = ['Buoi diem danh', s.classId || ''];
+        row.push(String(s.sessionDate || '').slice(0, 10), `${s.startedAt || ''} - ${s.endedAt || ''}`);
+        if (incStudents) row.push(`${s.totalStudents || 0} SV`, s.className || '');
+        if (incStatus) row.push(`Co mat: ${s.presentCount || 0} | Tre: ${s.lateCount || 0} | Vang: ${s.absentCount || 0} (${s.attendanceRate || 0}%)`);
+        if (incConf) row.push('PostgreSQL Session');
+        rows.push(row);
+      });
+    }
+    if (incStudents) {
+      logs.forEach((l) => {
+        const row = ['Chi tiet quet AI', l.classId || ''];
+        if (incSessions) row.push(String(l.timestamp || '').slice(0, 10), String(l.timestamp || '').slice(11, 19));
+        row.push(l.studentId || '', l.studentName || '');
+        if (incStatus) row.push('Có mặt');
+        if (incConf) row.push(l.confidence || '—');
+        rows.push(row);
+      });
+    }
+
+    const csvText = '\uFEFF' + rows.map((r) => r.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const ext = expState.format === 'pdf' ? 'pdf' : 'csv';
+    return {
+      filename: `BaoCaoDiemDanh_${clsTag}_${stamp}.${ext}`,
+      mime: 'text/csv;charset=utf-8;',
+      content: csvText,
+      records: Math.max(0, rows.length - 1),
+    };
+  }
+
+  function runExportPipeline() {
+    if (expState.isGenerating) return;
+    expState.isGenerating = true;
+
+    const btn = document.getElementById('btnExpGenerate');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ ĐANG XUẤT BÁO CÁO...';
+    }
+
+    const statusEl = document.getElementById('expPipelineStatus');
+    const pctEl = document.getElementById('expPipelinePct');
+    const fillEl = document.getElementById('expProgressFill');
+    const termBody = document.getElementById('expTerminalLog');
+    if (termBody) termBody.innerHTML = '';
+
+    const setStep = (stepIdx, pct, statusText) => {
+      if (statusEl) statusEl.textContent = statusText;
+      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (fillEl) fillEl.style.width = `${pct}%`;
+      document.querySelectorAll('[data-exp-pstep]').forEach((el) => {
+        const n = Number(el.getAttribute('data-exp-pstep'));
+        el.classList.toggle('done', n < stepIdx);
+        el.classList.toggle('active', n === stepIdx);
+      });
+    };
+
+    const payload = buildExportFilePayload();
+    setStep(1, 22, 'Đang thu thập dữ liệu PostgreSQL...');
+    appendExpLog('STEP 1', `Truy vấn dữ liệu lớp=${expState.classId}, khoảng ${expState.startDate} → ${expState.endDate}`);
+
+    setTimeout(() => {
+      setStep(2, 52, 'Đang phân tích & chuẩn hóa bản ghi...');
+      appendExpLog('STEP 2', `Đã tổng hợp ${payload.records} bản ghi hợp lệ.`, true);
+    }, 280);
+
+    setTimeout(() => {
+      setStep(3, 78, 'Đang dựng bảng & biểu đồ chuyên cần...');
+      appendExpLog('STEP 3', `Áp dụng định dạng ${expState.format.toUpperCase()}...`);
+    }, 560);
+
+    setTimeout(() => {
+      setStep(4, 100, 'Hoàn tất xuất báo cáo!');
+      document.querySelectorAll('[data-exp-pstep]').forEach((el) => {
+        el.classList.remove('active');
+        el.classList.add('done');
+      });
+
+      if (expState.format === 'pdf') {
+        appendExpLog('DONE', `Mở hộp thoại in / xuất PDF: ${payload.filename}`, true);
+        window.print();
+      } else {
+        const blob = new Blob([payload.content], { type: payload.mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = payload.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        appendExpLog('DONE', `Đã tải xuống ${payload.filename} (${payload.records} bản ghi).`, true);
+      }
+
+      saveRecentReport({
+        filename: payload.filename,
+        format: expState.format,
+        records: payload.records,
+        createdAt: new Date().toLocaleString('vi-VN'),
+        mime: payload.mime,
+        content: payload.content,
+      });
+      renderRecentReports();
+      showToast(`Đã xuất báo cáo ${payload.filename}!`);
+
+      expState.isGenerating = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = '⬇ XUẤT BÁO CÁO NGAY';
+      }
+    }, 880);
+  }
+
+  document.getElementById('expClassSelect')?.addEventListener('change', (e) => {
+    expState.classId = e.target.value || 'ALL';
+    renderExportPage();
+    triggerPreviewScan();
   });
 
-  document.getElementById('btnExportClassesCsv').addEventListener('click', () => {
-    const rows = [['Ma lop', 'Ten lop', 'Hoc ky', 'Lich hoc', 'Phong', 'Si so']];
-    allClasses.forEach((c) => rows.push([c.joinCode, c.className, c.semester, c.scheduleText, c.roomText, c.totalStudents]));
-    downloadCsv(`DanhSachLop_${lecturerId}.csv`, rows);
-    showToast('Đã xuất danh sách lớp học CSV!');
+  document.querySelectorAll('[data-exp-range]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const preset = btn.getAttribute('data-exp-range') || 'month';
+      expState.rangePreset = preset;
+      document.querySelectorAll('[data-exp-range]').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyExpRangePreset(preset);
+      renderExpCalendars();
+      renderExpPreview(true);
+    });
+  });
+
+  ['expDateStart', 'expDateEnd'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      expState.startDate = document.getElementById('expDateStart')?.value || '';
+      expState.endDate = document.getElementById('expDateEnd')?.value || '';
+      expState.rangePreset = 'custom';
+      document.querySelectorAll('[data-exp-range]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-exp-range') === 'custom');
+      });
+      renderExpCalendars();
+      renderExpPreview(true);
+    });
+  });
+
+  document.querySelectorAll('[data-exp-format]').forEach((card) => {
+    card.addEventListener('click', () => {
+      expState.format = card.getAttribute('data-exp-format') || 'excel';
+      document.querySelectorAll('[data-exp-format]').forEach((c) => c.classList.remove('active'));
+      card.classList.add('active');
+      renderExpPreview(true);
+    });
+  });
+
+  ['expOptStudents', 'expOptStatus', 'expOptConfidence', 'expOptSessions', 'expOptChart', 'expOptNotes'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('change', () => renderExpPreview(true));
+  });
+
+  document.getElementById('btnExpGenerate')?.addEventListener('click', runExportPipeline);
+  document.getElementById('btnExpPrintPreview')?.addEventListener('click', () => window.print());
+  document.getElementById('btnExpClearRecent')?.addEventListener('click', () => {
+    expState.recentReports = [];
+    try {
+      localStorage.removeItem(`wq_recent_reports_${lecturerId}`);
+    } catch {
+      // ignore
+    }
+    renderRecentReports();
+    showToast('Đã xóa lịch sử báo cáo gần đây.');
   });
 
   // Callbacks from C# MainForm.cs
@@ -1046,6 +1624,7 @@
 
     renderClasses();
     renderHistory();
+    renderExportPage();
   };
 
   window.onStudentsLookup = function (res) {
