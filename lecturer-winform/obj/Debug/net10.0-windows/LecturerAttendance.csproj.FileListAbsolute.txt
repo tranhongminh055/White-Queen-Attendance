@@ -44,3 +44,5 @@ g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\face_rec
 g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\face_recognition_model.bin
 g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\tiny_face_detector_model-weights_manifest.json
 g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\models\tiny_face_detector_model.bin
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\dashboard\app.js
+g:\White Queen\lecturer-winform\bin\Debug\net10.0-windows\Assets\dashboard\styles.css

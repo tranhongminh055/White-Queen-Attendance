@@ -3,188 +3,294 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SPACE X · Lecturer Workspace</title>
-  <style>
-    :root {
-      --bg: #020408;
-      --surface: #0b1018;
-      --border: rgba(255, 255, 255, 0.1);
-      --cyan: #00d2ff;
-      --emerald: #34d399;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-      --font-mono: "Cascadia Code", "Consolas", monospace;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    body {
-      min-height: 100vh;
-      background:
-        radial-gradient(circle at 20% 15%, rgba(0, 210, 255, 0.12), transparent 48%),
-        radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.12), transparent 48%),
-        var(--bg);
-      color: var(--text);
-      font-family: var(--font-sans);
-      animation: dashEnter 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
-      transition: opacity 0.3s ease, transform 0.3s ease;
-    }
-
-    body.is-leaving {
-      opacity: 0;
-      transform: scale(0.985);
-    }
-
-    .topbar {
-      height: 64px;
-      padding: 0 28px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(2, 4, 8, 0.88);
-      backdrop-filter: blur(12px);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo {
-      font-weight: 800;
-      font-size: 1.05rem;
-      letter-spacing: 0.22em;
-    }
-
-    .logo span { color: var(--cyan); }
-
-    .badge {
-      font-family: var(--font-mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.12em;
-      color: var(--emerald);
-      border: 1px solid rgba(52, 211, 153, 0.35);
-      background: rgba(16, 185, 129, 0.08);
-      padding: 4px 10px;
-      border-radius: 999px;
-    }
-
-    .user-actions {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .lecturer-pill {
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border);
-      padding: 7px 14px;
-      border-radius: 6px;
-    }
-
-    .logout-btn {
-      font-family: var(--font-mono);
-      font-size: 0.74rem;
-      font-weight: 600;
-      color: #fca5a5;
-      background: rgba(239, 68, 68, 0.08);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .logout-btn:hover {
-      background: rgba(239, 68, 68, 0.18);
-      border-color: rgba(239, 68, 68, 0.6);
-    }
-
-    .workspace {
-      max-width: 1120px;
-      margin: 48px auto;
-      padding: 0 28px;
-    }
-
-    .hero-card {
-      background: rgba(11, 16, 24, 0.88);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 36px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
-    }
-
-    .kicker {
-      font-family: var(--font-mono);
-      font-size: 0.74rem;
-      letter-spacing: 0.16em;
-      color: var(--cyan);
-      margin-bottom: 10px;
-    }
-
-    h1 {
-      font-size: 1.9rem;
-      margin-bottom: 10px;
-    }
-
-    p {
-      color: var(--muted);
-      line-height: 1.6;
-      max-width: 680px;
-    }
-
-    @keyframes dashEnter {
-      from { opacity: 0; transform: translateY(12px) scale(0.99); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-  </style>
+  <title>SpaceX Lecturer Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">SPACE <span>X</span></div>
-      <div class="badge">● WORKSPACE READY</div>
+  <div class="ambient-glow"></div>
+
+  <div class="app-shell">
+    <!-- LEFT FIXED SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+            <path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/>
+            <circle cx="9" cy="10" r="1" fill="#38bdf8"/>
+            <circle cx="15" cy="10" r="1" fill="#38bdf8"/>
+            <path d="M9 15c1.5 1 4.5 1 6 0"/>
+          </svg>
+        </div>
+        <span class="brand-name">SPACE X</span>
+        <span class="brand-tag">LECTURER</span>
+      </div>
+
+      <div class="profile-card">
+        <div class="profile-top">
+          <div class="avatar-circle" id="lecturerAvatar">GV</div>
+          <div class="profile-info">
+            <div class="profile-name" id="lecturerName">Giảng viên</div>
+            <div class="profile-id" id="lecturerId">GV: --</div>
+          </div>
+        </div>
+        <div class="profile-divider"></div>
+        <div class="system-status">
+          <span class="status-dot"></span>
+          <span>SYSTEM ONLINE</span>
+        </div>
+      </div>
+
+      <div class="nav-label">ĐIỀU HƯỚNG</div>
+      <nav class="nav-menu">
+        <button type="button" class="nav-item active" data-view="classes">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+          <span>Lớp học của tôi</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="history">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"/>
+            <polyline points="12 7 12 12 15 14"/>
+          </svg>
+          <span>Lịch sử điểm danh</span>
+        </button>
+
+        <button type="button" class="nav-item" data-view="export">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <polyline points="9 15 12 18 15 15"/>
+          </svg>
+          <span>Xuất báo cáo</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button type="button" class="btn-sidebar-outline" id="btnLogout">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          <span>Đăng xuất</span>
+        </button>
+
+        <button type="button" class="btn-sidebar-danger" id="btnExit">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+            <line x1="12" y1="2" x2="12" y2="12"/>
+          </svg>
+          <span>Thoát phần mềm</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main-content">
+      <!-- VIEW: CLASSES -->
+      <section class="view-section active" id="view-classes">
+        <header class="topbar">
+          <div>
+            <div class="kicker">— QUẢN LÝ LỚP HỌC</div>
+            <h1 class="page-title">Lớp học của tôi</h1>
+          </div>
+
+          <div class="topbar-actions">
+            <div class="search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="searchInput" placeholder="Tìm theo tên lớp hoặc mã lớp..." />
+            </div>
+
+            <button type="button" class="btn-primary-cyan" id="btnOpenCreateTop">
+              <span>+ Tạo lớp học mới</span>
+            </button>
+          </div>
+        </header>
+
+        <!-- KPI ROW -->
+        <div class="kpi-row">
+          <div class="kpi-card" style="--delay: 0ms">
+            <div class="kpi-icon cyan">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kpi-label">TỔNG SỐ LỚP</div>
+              <div class="kpi-value" id="kpiTotalClasses">0</div>
+            </div>
+          </div>
+
+          <div class="kpi-card" style="--delay: 70ms">
+            <div class="kpi-icon blue">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+            <div>
+              <div class="kpi-label">TỔNG SINH VIÊN</div>
+              <div class="kpi-value" id="kpiTotalStudents">0</div>
+            </div>
+          </div>
+
+          <div class="kpi-card" style="--delay: 140ms">
+            <div class="kpi-icon green">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
+                <circle cx="12" cy="12" r="2.5"/>
+              </svg>
+            </div>
+            <div class="kpi-live-wrap">
+              <div class="kpi-label-row">
+                <span class="kpi-label">PHIÊN ĐIỂM DANH HÔM NAY</span>
+                <span class="live-badge"><span class="live-dot"></span> LIVE</span>
+              </div>
+              <div class="kpi-value" id="kpiTodaySessions">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CLASSES GRID -->
+        <div class="classes-grid" id="classesGrid"></div>
+      </section>
+
+      <!-- VIEW: ATTENDANCE HISTORY -->
+      <section class="view-section" id="view-history">
+        <header class="topbar">
+          <div>
+            <div class="kicker">— NHẬT KÝ ĐIỂM DANH</div>
+            <h1 class="page-title">Lịch sử điểm danh</h1>
+          </div>
+          <div class="topbar-actions">
+            <button type="button" class="btn-secondary" id="btnRefreshHistory">↻ Làm mới</button>
+          </div>
+        </header>
+
+        <div class="panel-box">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>MSSV</th>
+                <th>Họ tên sinh viên</th>
+                <th>Lớp học</th>
+                <th>Độ khớp</th>
+                <th>Thời gian</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- VIEW: EXPORT REPORT -->
+      <section class="view-section" id="view-export">
+        <header class="topbar">
+          <div>
+            <div class="kicker">— BÁO CÁO CHUYÊN CẦN</div>
+            <h1 class="page-title">Xuất báo cáo</h1>
+          </div>
+        </header>
+
+        <div class="export-card">
+          <div class="export-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <polyline points="9 15 12 18 15 15"/>
+            </svg>
+          </div>
+          <h2>Xuất file CSV / Excel dữ liệu điểm danh thật</h2>
+          <p>Hệ thống xuất toàn bộ danh sách lớp học và nhật ký điểm danh từ PostgreSQL (mở trực tiếp bằng Microsoft Excel hỗ trợ tiếng Việt UTF-8).</p>
+          <div class="export-actions">
+            <button type="button" class="btn-primary-cyan" id="btnExportAttendanceCsv">⬇ Tải báo cáo điểm danh (.CSV)</button>
+            <button type="button" class="btn-secondary" id="btnExportClassesCsv">⬇ Tải danh sách lớp học (.CSV)</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL: CREATE CLASS -->
+  <div class="modal-backdrop" id="createClassModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="kicker">— NEW CLASS</div>
+          <h2>Tạo lớp học mới</h2>
+        </div>
+        <button type="button" class="modal-close" id="btnCloseCreateModal">✕</button>
+      </div>
+
+      <form id="createClassForm" class="modal-form">
+        <div class="field">
+          <label>TÊN LỚP / MÔN HỌC *</label>
+          <input type="text" id="inputClassName" required placeholder="VD: Nhập môn Trí tuệ nhân tạo" />
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>MÃ LỚP / JOIN CODE (ĐỂ TRỐNG TỰ SINH)</label>
+            <input type="text" id="inputJoinCode" placeholder="VD: WQ-K21A" maxlength="24" style="text-transform: uppercase" />
+          </div>
+          <div class="field">
+            <label>HỌC KỲ</label>
+            <input type="text" id="inputSemester" value="HK1 2025-2026" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>LỊCH HỌC</label>
+            <input type="text" id="inputSchedule" placeholder="VD: Thứ 2, 07:30 - 09:30" />
+          </div>
+          <div class="field">
+            <label>PHÒNG HỌC</label>
+            <input type="text" id="inputRoom" placeholder="VD: Phòng B3.12" />
+          </div>
+        </div>
+
+        <div class="modal-error" id="createClassError"></div>
+
+        <div class="modal-foot">
+          <button type="button" class="btn-secondary" id="btnCancelCreate">Hủy</button>
+          <button type="submit" class="btn-primary-cyan" id="btnSubmitCreate">Tạo lớp học →</button>
+        </div>
+      </form>
     </div>
-    <div class="user-actions">
-      <div class="lecturer-pill" id="lecturerInfo">Giảng viên</div>
-      <button type="button" class="logout-btn" id="btnLogout">ĐĂNG XUẤT</button>
+  </div>
+
+  <!-- MODAL: VIEW CLASS STUDENTS -->
+  <div class="modal-backdrop" id="studentsModal">
+    <div class="modal-card modal-lg">
+      <div class="modal-head">
+        <div>
+          <div class="kicker" id="studentsModalCode">— LỚP HỌC</div>
+          <h2 id="studentsModalTitle">Danh sách sinh viên</h2>
+        </div>
+        <button type="button" class="modal-close" id="btnCloseStudentsModal">✕</button>
+      </div>
+
+      <div id="studentsModalBody" class="students-list"></div>
     </div>
-  </header>
+  </div>
 
-  <main class="workspace">
-    <section class="hero-card">
-      <div class="kicker">// BẢNG ĐIỀU KHIỂN GIẢNG VIÊN</div>
-      <h1 id="welcomeTitle">Xin chào!</h1>
-      <p>
-        Phiên làm việc Giảng viên đã được xác thực thành công. Không gian này đã sẵn sàng để tích hợp
-        <strong>Camera điểm danh AI trực tiếp</strong>, danh sách lớp học và <strong>xuất báo cáo Excel</strong>.
-      </p>
-    </section>
-  </main>
+  <!-- TOAST -->
+  <div class="toast-container" id="toastContainer"></div>
 
-  <script>
-    const params = new URLSearchParams(window.location.search)
-    const name = params.get('name') || 'Giảng viên'
-    const id = params.get('id')
-
-    document.getElementById('lecturerInfo').textContent = id ? `${name} · ${id}` : name
-    document.getElementById('welcomeTitle').textContent = `Xin chào, ${name}`
-
-    document.getElementById('btnLogout').addEventListener('click', () => {
-      document.body.classList.add('is-leaving')
-      setTimeout(() => {
-        if (window.chrome && window.chrome.webview) {
-          window.chrome.webview.postMessage({ action: 'open_landing' })
-        }
-      }, 260)
-    })
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
-

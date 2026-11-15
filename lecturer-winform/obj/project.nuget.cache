@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "tA9uEedd0bg=",
+  "dgSpecHash": "1FF6C+i3VwI=",
   "success": true,
-  "projectFilePath": "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
+  "projectFilePath": "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Admin\\.nuget\\packages\\microsoft.web.webview2\\1.0.3240.44\\microsoft.web.webview2.1.0.3240.44.nupkg.sha512"
   ],

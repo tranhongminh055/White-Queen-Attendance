@@ -165,6 +165,70 @@ public sealed class MainForm : Form
                     });
                     await _webView.CoreWebView2.ExecuteScriptAsync($"window.onLoginResult && window.onLoginResult({resultJson})");
                     break;
+
+                case "dashboard_load_data":
+                {
+                    var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(lecturerId))
+                    {
+                        await _webView.CoreWebView2.ExecuteScriptAsync("window.onDashboardData && window.onDashboardData({ok:false,classes:[],todaySessions:0,logs:[]})");
+                        break;
+                    }
+
+                    var classesTask = _apiClient.GetLecturerClassesRawAsync(lecturerId);
+                    var attTask = _apiClient.GetLecturerAttendanceRawAsync(lecturerId);
+                    await Task.WhenAll(classesTask, attTask);
+
+                    var (clsOk, clsJson) = classesTask.Result;
+                    var (_, attJson) = attTask.Result;
+                    var payload = $"{{\"ok\":{(clsOk ? "true" : "false")},\"classes\":{(clsOk ? clsJson : "[]")},\"attendance\":{attJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onDashboardData && window.onDashboardData({payload})");
+                    break;
+                }
+
+                case "class_create":
+                {
+                    var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
+                    string Str(string key) => doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? string.Empty : string.Empty;
+                    var (ok, respJson) = await _apiClient.CreateClassRawAsync(
+                        lecturerId,
+                        Str("className"),
+                        Str("joinCode"),
+                        Str("semester"),
+                        Str("scheduleText"),
+                        Str("roomText")
+                    );
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassCreated && window.onClassCreated({payload})");
+                    break;
+                }
+
+                case "class_delete":
+                {
+                    var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                    var (ok, respJson) = await _apiClient.DeleteClassAsync(classId);
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassDeleted && window.onClassDeleted({payload})");
+                    break;
+                }
+
+                case "class_students":
+                {
+                    var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                    var (ok, respJson) = await _apiClient.GetClassStudentsRawAsync(classId);
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassStudents && window.onClassStudents({payload})");
+                    break;
+                }
+
+                case "logout":
+                    _currentLecturer = null;
+                    NavigateTo("login/index.html");
+                    break;
+
+                case "exit_app":
+                    Application.Exit();
+                    break;
             }
         }
         catch

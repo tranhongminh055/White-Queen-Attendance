@@ -1068,6 +1068,87 @@ def leave_class(student_id: str, class_id: str):
         conn.close()
 
 
+@app.get("/api/classes/{class_id}/students")
+def get_class_students(class_id: str):
+    cid = class_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT a.EmployeeId, a.FullName, a.Email,
+                   COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated,
+                   s.AvatarDataUrl, m.JoinedAt
+            FROM ClassMembers m
+            INNER JOIN Accounts a ON UPPER(a.EmployeeId) = UPPER(m.StudentId)
+            LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(m.StudentId)
+            WHERE UPPER(m.ClassId) = ?
+            ORDER BY m.JoinedAt DESC
+            """,
+            (cid,),
+        )
+        return [
+            {
+                "id": row[0],
+                "fullName": row[1],
+                "email": row[2],
+                "embeddingCreated": bool(row[3]),
+                "avatar": row[4],
+                "joinedAt": row[5].isoformat() if hasattr(row[5], "isoformat") else str(row[5] or ""),
+            }
+            for row in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+
+
+@app.get("/api/lecturers/{lecturer_id}/attendance-summary")
+def get_lecturer_attendance_summary(lecturer_id: str):
+    lid = lecturer_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COUNT(DISTINCT al.ClassId)
+            FROM AttendanceLogs al
+            INNER JOIN Classes c ON UPPER(c.Id) = UPPER(al.ClassId)
+            WHERE UPPER(c.LecturerId) = ? AND al.ScannedDate = CURRENT_DATE
+            """,
+            (lid,),
+        )
+        today_sessions = int((cur.fetchone() or [0])[0])
+
+        cur.execute(
+            """
+            SELECT al.Id, al.StudentId, al.StudentName, al.ClassId, c.ClassName,
+                   al.Confidence, al.Device, al.TimestampText
+            FROM AttendanceLogs al
+            INNER JOIN Classes c ON UPPER(c.Id) = UPPER(al.ClassId)
+            WHERE UPPER(c.LecturerId) = ?
+            ORDER BY al.CreatedAt DESC
+            LIMIT 100
+            """,
+            (lid,),
+        )
+        logs = [
+            {
+                "id": row[0],
+                "studentId": row[1],
+                "studentName": row[2],
+                "classId": row[3],
+                "className": row[4],
+                "confidence": row[5],
+                "device": row[6],
+                "timestamp": row[7],
+            }
+            for row in cur.fetchall()
+        ]
+        return {"todaySessions": today_sessions, "logs": logs}
+    finally:
+        conn.close()
+
+
 @app.get("/api/students")
 def list_students(includeSnapshots: bool = Query(default=False)):
     conn = get_connection()

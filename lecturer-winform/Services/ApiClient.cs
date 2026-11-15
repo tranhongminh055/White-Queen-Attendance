@@ -211,5 +211,89 @@ public sealed class ApiClient
             };
         }
     }
+
+    public async Task<(bool Ok, string Json)> GetLecturerClassesRawAsync(string lecturerId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/lecturers/{Uri.EscapeDataString(lecturerId)}/classes");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "[]" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> GetLecturerAttendanceRawAsync(string lecturerId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/lecturers/{Uri.EscapeDataString(lecturerId)}/attendance-summary");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{\"todaySessions\":0,\"logs\":[]}" : body);
+        }
+        catch
+        {
+            return (false, "{\"todaySessions\":0,\"logs\":[]}");
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> CreateClassRawAsync(
+        string lecturerId,
+        string className,
+        string joinCode,
+        string semester,
+        string scheduleText,
+        string roomText)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/classes", new
+            {
+                lecturerId,
+                className,
+                joinCode = string.IsNullOrWhiteSpace(joinCode) ? null : joinCode,
+                semester = string.IsNullOrWhiteSpace(semester) ? "HK1 2025-2026" : semester,
+                scheduleText,
+                roomText
+            });
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> DeleteClassAsync(string classId)
+    {
+        try
+        {
+            var resp = await _http.DeleteAsync($"/api/classes/{Uri.EscapeDataString(classId)}");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> GetClassStudentsRawAsync(string classId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/classes/{Uri.EscapeDataString(classId)}/students");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "[]" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
 }
 
