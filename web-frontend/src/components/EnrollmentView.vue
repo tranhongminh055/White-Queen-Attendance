@@ -444,7 +444,7 @@ async function completeEnrollment() {
       type: 'success',
       message: `Đã lưu dữ liệu sinh trắc học 5 góc vào SQL Server cho ${savedStudent?.name || profile.fullName}!`
     })
-    emit('navigate', 'face-intro')
+    emit('navigate', profile.role === 'lecturer' ? 'lecturer-redirect' : 'face-intro')
   } catch (err) {
     sound.playWarning()
     emit('notify', {
@@ -498,7 +498,10 @@ onBeforeUnmount(() => {
     <!-- TOP HEADER BAR -->
     <header class="sx-enroll-header">
       <div class="sx-eh-left">
-        <SpaceXLogo @click="emit('navigate', 'face-intro')" title="Quay về Trang sinh viên" />
+        <SpaceXLogo
+          @click="emit('navigate', profile.role === 'lecturer' ? 'lecturer-redirect' : 'face-intro')"
+          :title="profile.role === 'lecturer' ? 'Quay về Trang giảng viên' : 'Quay về Trang sinh viên'"
+        />
         <span class="sx-brand-divider"></span>
         <span class="sx-brand-sub">BIOMETRIC AI</span>
       </div>
@@ -526,7 +529,12 @@ onBeforeUnmount(() => {
         <button type="button" class="sx-exit-btn" @click="emit('back')" title="Quay lại trang trước">
           ← QUAY LẠI
         </button>
-        <button type="button" class="sx-exit-btn" @click="emit('navigate', 'face-intro')" title="Thoát đăng ký">
+        <button
+          type="button"
+          class="sx-exit-btn"
+          @click="emit('navigate', profile.role === 'lecturer' ? 'lecturer-redirect' : 'face-intro')"
+          title="Thoát đăng ký"
+        >
           ✕ THOÁT
         </button>
       </div>

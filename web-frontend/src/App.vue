@@ -85,6 +85,7 @@ function applyTab(tab, pushHistory = true) {
   } else if (
     protectedTabs.includes(tab) &&
     tab !== 'lecturer-redirect' &&
+    tab !== 'enrollment' &&
     storage.getCurrentProfile()?.role === 'lecturer'
   ) {
     tab = 'lecturer-redirect'

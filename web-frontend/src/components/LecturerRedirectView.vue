@@ -11,9 +11,15 @@ const profile = computed(() => {
     id: current?.id || 'GV-00123',
     fullName: current?.fullName || 'Giảng viên',
     email: current?.email || '',
-    role: current?.role || 'lecturer'
+    role: current?.role || 'lecturer',
+    embeddingCreated: Boolean(current?.embeddingCreated)
   }
 })
+
+function handleGoEnroll() {
+  sound.playBeep()
+  emit('navigate', 'enrollment')
+}
 
 function handleLogout() {
   sound.playBeep()
@@ -143,6 +149,10 @@ function handleLogout() {
         </p>
 
         <div class="sx-logout-wrap">
+          <button type="button" class="sx-enroll-btn" @click="handleGoEnroll">
+            <span class="sx-enroll-icon">◎</span>
+            <span>{{ profile.embeddingCreated ? 'CẬP NHẬT KHUÔN MẶT' : 'ĐĂNG KÝ KHUÔN MẶT' }}</span>
+          </button>
           <button type="button" class="sx-logout-btn" @click="handleLogout">
             ĐĂNG XUẤT
           </button>
@@ -444,6 +454,38 @@ function handleLogout() {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.sx-enroll-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 24px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.22), rgba(56, 189, 248, 0.1));
+  border: 1px solid rgba(56, 189, 248, 0.65);
+  color: #e0f2fe;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(14, 165, 233, 0.18);
+  transition: transform 0.2s, background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  margin-bottom: 4px;
+}
+
+.sx-enroll-btn:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.36), rgba(56, 189, 248, 0.18));
+  border-color: #38bdf8;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.34);
+  color: #ffffff;
+}
+
+.sx-enroll-icon {
+  color: #38bdf8;
+  font-size: 0.95rem;
 }
 
 .sx-logout-btn {

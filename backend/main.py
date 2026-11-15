@@ -893,10 +893,21 @@ def enroll_student_face(payload: EnrollFaceRequest):
         )
         existing = cur.fetchone()
         if not existing:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Tài khoản {student_id} chưa tồn tại trong SQL Server. Vui lòng đăng ký tài khoản trước.",
+            cur.execute(
+                "SELECT EmployeeId, FullName, ClassId, Email FROM Accounts WHERE UPPER(EmployeeId) = ?",
+                (student_id,),
             )
+            acc = cur.fetchone()
+            if not acc:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Tài khoản {student_id} chưa tồn tại. Vui lòng đăng ký tài khoản trước.",
+                )
+            cur.execute(
+                "INSERT INTO StudentProfiles (StudentId, FullName, ClassId, Email, EmbeddingCreated) VALUES (?, ?, ?, ?, 0)",
+                (acc[0], acc[1], acc[2] or "LECTURER", acc[3] or ""),
+            )
+            existing = (acc[0], acc[1], acc[2] or "LECTURER", acc[3] or "")
 
         full_name = (payload.name or existing[1]).strip()
         class_id = (payload.classId or existing[2] or "CNTT-K21A").strip()
