@@ -70,8 +70,8 @@
       b.classList.toggle(
         'active',
         v === viewName ||
-          ((viewName === 'create-class' || viewName === 'attendance') && v === 'classes') ||
-          ((viewName === 'history-sessions' || viewName === 'history-detail') && v === 'history')
+        ((viewName === 'create-class' || viewName === 'attendance') && v === 'classes') ||
+        ((viewName === 'history-sessions' || viewName === 'history-detail') && v === 'history')
       );
     });
   }
@@ -541,7 +541,7 @@
       b.classList.toggle('active', b.getAttribute('data-hd-filter') === 'all');
     });
 
-    const cls = (state.classes || []).find((c) => c.id === selectedHistoryClassId);
+    const cls = (allClasses || []).find((c) => c.id === selectedHistoryClassId);
     const sessSummary = (attendanceSessions || []).find((s) => s.id === sessionId);
     const seqStr = String(hdState.seqNum).padStart(2, '0');
     const classCode = cls?.id || sessSummary?.classId || '—';
@@ -576,7 +576,7 @@
 
   window.onHistorySessionDetail = function (res) {
     if (!res || !res.ok || !res.data) {
-      showToast('Không thể tải chi tiết buổi điểm danh từ máy chủ.', true);
+      showToast('Không thể tải chi tiết buổi điểm danh từ máy chủ.', 'error');
       const tbody = document.getElementById('hdTableBody');
       if (tbody) {
         tbody.innerHTML = '<tr><td colspan="8" class="hd-empty-cell">Không thể tải dữ liệu buổi điểm danh.</td></tr>';
@@ -588,7 +588,7 @@
     hdState.detail = d;
 
     const seqStr = String(hdState.seqNum).padStart(2, '0');
-    const cls = (state.classes || []).find((c) => c.id === (d.classId || selectedHistoryClassId));
+    const cls = (allClasses || []).find((c) => c.id === (d.classId || selectedHistoryClassId));
     const roomTxt = cls?.room || '—';
     const setTxt = (id, v) => {
       const el = document.getElementById(id);
@@ -799,7 +799,7 @@
 
   document.getElementById('btnHdExportCsv')?.addEventListener('click', () => {
     if (!hdState.detail || !Array.isArray(hdState.detail.details)) {
-      showToast('Chưa có dữ liệu điểm danh để xuất.', true);
+      showToast('Chưa có dữ liệu điểm danh để xuất.', 'error');
       return;
     }
     const headers = ['STT', 'MSSV', 'Họ và tên', 'Giờ vào', 'Phương thức', 'Độ tin cậy', 'Trạng thái'];
@@ -1666,7 +1666,7 @@
     if (res?.base64) {
       try {
         const audio = new Audio(`data:audio/mpeg;base64,${res.base64}`);
-        audio.play().catch(() => {});
+        audio.play().catch(() => { });
         return;
       } catch {
         // Fallback to speechSynthesis
