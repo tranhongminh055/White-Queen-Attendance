@@ -794,6 +794,42 @@
     }
   }
 
+  const attPrepCanvas = document.createElement('canvas');
+  const attPrepCtx = attPrepCanvas.getContext('2d', { willReadFrequently: true });
+
+  function prepareAttendanceFrame(video) {
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    const tw = Math.min(640, vw);
+    const th = Math.round((vh / vw) * tw);
+    if (attPrepCanvas.width !== tw || attPrepCanvas.height !== th) {
+      attPrepCanvas.width = tw;
+      attPrepCanvas.height = th;
+    }
+    attPrepCtx.filter = 'none';
+    attPrepCtx.drawImage(video, 0, 0, tw, th);
+
+    const roiW = Math.floor(tw * 0.45);
+    const roiH = Math.floor(th * 0.55);
+    const roiX = Math.floor((tw - roiW) / 2);
+    const roiY = Math.floor((th - roiH) / 2);
+    const data = attPrepCtx.getImageData(roiX, roiY, roiW, roiH).data;
+    let lumaSum = 0;
+    let count = 0;
+    for (let i = 0; i < data.length; i += 16) {
+      lumaSum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      count++;
+    }
+    const avgLuma = lumaSum / Math.max(1, count);
+    if (avgLuma < 120) {
+      const boost = Math.min(2.2, Math.max(1.25, 135 / Math.max(35, avgLuma)));
+      attPrepCtx.filter = `brightness(${boost.toFixed(2)}) contrast(1.28)`;
+      attPrepCtx.drawImage(video, 0, 0, tw, th);
+      attPrepCtx.filter = 'none';
+    }
+    return { tw, th };
+  }
+
   let isScanningFrame = false;
   async function runFaceScanTick() {
     if (!attState.scanning || isScanningFrame || !attState.modelsLoaded) return;
@@ -804,12 +840,13 @@
     isScanningFrame = true;
     const t0 = performance.now();
     try {
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      const { tw, th } = prepareAttendanceFrame(video);
+      if (canvas.width !== tw || canvas.height !== th) {
+        canvas.width = tw;
+        canvas.height = th;
       }
       const detections = await faceapi
-        .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+        .detectAllFaces(attPrepCanvas, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 }))
         .withFaceLandmarks()
         .withFaceDescriptors();
 
@@ -1057,7 +1094,7 @@
           avatar: item.avatar,
         });
       });
-      attState.faceMatcher = labeled.length ? new faceapi.FaceMatcher(labeled, 0.52) : null;
+      attState.faceMatcher = labeled.length ? new faceapi.FaceMatcher(labeled, 0.58) : null;
     } else {
       attState.faceMatcher = null;
     }
