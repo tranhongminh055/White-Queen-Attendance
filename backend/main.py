@@ -173,6 +173,20 @@ class JoinClassRequest(BaseModel):
     joinCode: str = Field(..., min_length=2, max_length=24)
 
 
+class SaveAttendanceSessionRequest(BaseModel):
+    classId: str = Field(..., min_length=2, max_length=40)
+    className: str = Field(default="", max_length=160)
+    lecturerId: str = Field(..., min_length=2, max_length=32)
+    startedAt: str = Field(default="", max_length=32)
+    endedAt: str = Field(default="", max_length=32)
+    totalStudents: int = 0
+    presentCount: int = 0
+    lateCount: int = 0
+    absentCount: int = 0
+    attendanceRate: float = 0.0
+    details: list[dict[str, Any]] = Field(default_factory=list)
+
+
 def validate_strong_password(password: str) -> str | None:
     if len(password) < 8:
         return "Mật khẩu phải có ít nhất 8 ký tự."
@@ -1533,6 +1547,92 @@ def record_attendance(payload: AttendanceRequest):
     except Exception:
         conn.rollback()
         raise
+    finally:
+        conn.close()
+
+
+@app.post("/api/attendance/sessions")
+def save_attendance_session(payload: SaveAttendanceSessionRequest):
+    session_id = f"SES_{int(time.time() * 1000)}_{secrets.token_hex(2).upper()}"
+    today = date.today()
+    ended_at = payload.endedAt.strip() or datetime.now().strftime("%H:%M:%S")
+    started_at = payload.startedAt.strip() or ended_at
+    details_json = json.dumps(payload.details, ensure_ascii=False)
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO AttendanceSessions
+                (Id, ClassId, ClassName, LecturerId, SessionDate, StartedAt, EndedAt,
+                 TotalStudents, PresentCount, LateCount, AbsentCount, AttendanceRate, DetailsJson)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                session_id,
+                payload.classId.strip().upper(),
+                payload.className.strip(),
+                payload.lecturerId.strip().upper(),
+                today,
+                started_at,
+                ended_at,
+                payload.totalStudents,
+                payload.presentCount,
+                payload.lateCount,
+                payload.absentCount,
+                payload.attendanceRate,
+                details_json,
+            ),
+        )
+        conn.commit()
+        return {
+            "success": True,
+            "sessionId": session_id,
+            "sessionDate": today.isoformat(),
+            "startedAt": started_at,
+            "endedAt": ended_at,
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@app.get("/api/lecturers/{lecturer_id}/attendance-sessions")
+def get_lecturer_attendance_sessions(lecturer_id: str):
+    lid = lecturer_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT Id, ClassId, ClassName, SessionDate, StartedAt, EndedAt,
+                   TotalStudents, PresentCount, LateCount, AbsentCount, AttendanceRate
+            FROM AttendanceSessions
+            WHERE UPPER(LecturerId) = ?
+            ORDER BY CreatedAt DESC
+            LIMIT 100
+            """,
+            (lid,),
+        )
+        return [
+            {
+                "id": r[0],
+                "classId": r[1],
+                "className": r[2],
+                "sessionDate": r[3].isoformat() if hasattr(r[3], "isoformat") else str(r[3]),
+                "startedAt": r[4],
+                "endedAt": r[5],
+                "totalStudents": r[6],
+                "presentCount": r[7],
+                "lateCount": r[8],
+                "absentCount": r[9],
+                "attendanceRate": r[10],
+            }
+            for r in cur.fetchall()
+        ]
     finally:
         conn.close()
 

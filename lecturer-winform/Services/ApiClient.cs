@@ -367,5 +367,39 @@ public sealed class ApiClient
             return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
         }
     }
+
+    public async Task<(bool Ok, string Json)> SaveAttendanceSessionRawAsync(JsonElement sessionPayload)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/attendance/sessions", sessionPayload);
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
+    private static readonly HttpClient _ttsHttp = new() { Timeout = TimeSpan.FromSeconds(5) };
+
+    public async Task<string?> FetchVietnameseTtsBase64Async(string text)
+    {
+        try
+        {
+            var url = $"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=vi&q={Uri.EscapeDataString(text)}";
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+            using var resp = await _ttsHttp.SendAsync(req);
+            if (!resp.IsSuccessStatusCode) return null;
+            var bytes = await resp.Content.ReadAsByteArrayAsync();
+            return Convert.ToBase64String(bytes);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
 

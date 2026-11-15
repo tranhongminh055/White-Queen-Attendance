@@ -76,4 +76,25 @@ CREATE INDEX IF NOT EXISTS IX_Classes_JoinCode ON Classes (JoinCode);
 CREATE INDEX IF NOT EXISTS IX_Classes_LecturerId ON Classes (LecturerId);
 CREATE INDEX IF NOT EXISTS IX_ClassMembers_StudentId ON ClassMembers (StudentId);
 
+CREATE TABLE IF NOT EXISTS AttendanceSessions (
+    Id VARCHAR(48) NOT NULL PRIMARY KEY,
+    ClassId VARCHAR(40) NOT NULL REFERENCES Classes(Id) ON DELETE CASCADE,
+    ClassName VARCHAR(160) NOT NULL,
+    LecturerId VARCHAR(32) NOT NULL REFERENCES Accounts(EmployeeId) ON DELETE CASCADE,
+    SessionDate DATE NOT NULL DEFAULT CURRENT_DATE,
+    StartedAt VARCHAR(32) NOT NULL DEFAULT '',
+    EndedAt VARCHAR(32) NOT NULL DEFAULT '',
+    TotalStudents INTEGER NOT NULL DEFAULT 0,
+    PresentCount INTEGER NOT NULL DEFAULT 0,
+    LateCount INTEGER NOT NULL DEFAULT 0,
+    AbsentCount INTEGER NOT NULL DEFAULT 0,
+    AttendanceRate DOUBLE PRECISION NOT NULL DEFAULT 0,
+    DetailsJson TEXT NOT NULL DEFAULT '[]',
+    CreatedAt TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS IX_AttendanceSessions_Class_Date ON AttendanceSessions (ClassId, SessionDate DESC);
+CREATE INDEX IF NOT EXISTS IX_AttendanceSessions_Lecturer ON AttendanceSessions (LecturerId, CreatedAt DESC);
+
+
 

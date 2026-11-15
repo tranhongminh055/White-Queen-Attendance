@@ -286,6 +286,27 @@ public sealed class MainForm : Form
                     break;
                 }
 
+                case "attendance_save_session":
+                {
+                    var el = doc.RootElement;
+                    var (ok, respJson) = await _apiClient.SaveAttendanceSessionRawAsync(el);
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceSessionSaved && window.onAttendanceSessionSaved({payload})");
+                    break;
+                }
+
+                case "speak_vi":
+                {
+                    var text = doc.RootElement.TryGetProperty("text", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        var b64 = await _apiClient.FetchVietnameseTtsBase64Async(text);
+                        var payload = $"{{\"base64\":{JsonSerializer.Serialize(b64)},\"text\":{JsonSerializer.Serialize(text)}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onSpeakVi && window.onSpeakVi({payload})");
+                    }
+                    break;
+                }
+
                 case "logout":
                     _currentLecturer = null;
                     NavigateTo("login/index.html");

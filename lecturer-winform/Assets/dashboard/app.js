@@ -893,8 +893,54 @@
     startAttClock();
     renderAttendanceUI();
     postMsg({ action: 'attendance_init', classId });
+    attState.startedAt = new Date().toTimeString().slice(0, 8);
     startAttCamera();
   }
+
+  function playChimeTone() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.24);
+    } catch {
+      // Ignore audio context errors
+    }
+  }
+
+  function speakVietnamese(text) {
+    playChimeTone();
+    postMsg({ action: 'speak_vi', text });
+  }
+
+  window.onSpeakVi = function (res) {
+    if (res?.base64) {
+      try {
+        const audio = new Audio(`data:audio/mpeg;base64,${res.base64}`);
+        audio.play().catch(() => {});
+        return;
+      } catch {
+        // Fallback to speechSynthesis
+      }
+    }
+    if ('speechSynthesis' in window && res?.text) {
+      const utter = new SpeechSynthesisUtterance(res.text);
+      utter.lang = 'vi-VN';
+      utter.rate = 1.05;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    }
+  };
 
   window.onAttendanceInit = function (res) {
     if (res?.classId !== attState.classId) return;
@@ -953,9 +999,31 @@
     attState.justCheckedId = key;
     renderAttendanceUI();
     if (res?.data?.success) {
-      showCamMatchPopup(rec?.studentName || key, rec?.studentId || key, timePart);
+      const name = rec?.studentName || key;
+      showCamMatchPopup(name, rec?.studentId || key, timePart);
+      speakVietnamese(`Đã điểm danh sinh viên ${name}`);
     }
     postMsg({ action: 'dashboard_load_data' });
+  };
+
+  window.onAttendanceSessionSaved = function (res) {
+    const btn = document.getElementById('btnAttFinish');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⏹ Kết thúc Điểm danh';
+    }
+    stopAttCamera();
+    if (attState.clockTimer) clearInterval(attState.clockTimer);
+
+    if (res?.ok && res?.data?.success) {
+      showToast('Đã lưu kết quả buổi điểm danh vào cơ sở dữ liệu PostgreSQL!');
+      speakVietnamese('Đã kết thúc và lưu buổi điểm danh');
+    } else {
+      const detail = res?.data?.detail ? ` (${res.data.detail})` : '';
+      showToast(`Không thể lưu phiên điểm danh${detail}.`, 'error');
+    }
+    postMsg({ action: 'dashboard_load_data' });
+    switchView('classes');
   };
 
   // Attendance View Controls
@@ -993,11 +1061,42 @@
   });
 
   document.getElementById('btnAttFinish')?.addEventListener('click', () => {
-    stopAttCamera();
-    if (attState.clockTimer) clearInterval(attState.clockTimer);
-    showToast('Đã kết thúc phiên điểm danh và đồng bộ PostgreSQL.');
-    postMsg({ action: 'dashboard_load_data' });
-    switchView('classes');
+    const btn = document.getElementById('btnAttFinish');
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Đang lưu kết quả buổi học...';
+    }
+    let presentCount = 0;
+    let lateCount = 0;
+    const details = attState.students.map((st) => {
+      const rec = attState.statusMap.get(st.id.toUpperCase()) || { status: 'absent', time: '' };
+      if (rec.status === 'present') presentCount++;
+      else if (rec.status === 'late') lateCount++;
+      return {
+        studentId: st.id,
+        fullName: st.fullName,
+        status: rec.status,
+        time: rec.time || '',
+      };
+    });
+    const totalStudents = attState.students.length;
+    const absentCount = Math.max(0, totalStudents - presentCount - lateCount);
+    const attendanceRate = totalStudents > 0 ? Math.round(((presentCount + lateCount) / totalStudents) * 1000) / 10 : 0;
+
+    postMsg({
+      action: 'attendance_save_session',
+      classId: attState.classId || '',
+      className: attState.classObj?.className || '',
+      lecturerId: currentLecturer?.employeeId || '',
+      startedAt: attState.startedAt || new Date().toTimeString().slice(0, 8),
+      endedAt: new Date().toTimeString().slice(0, 8),
+      totalStudents,
+      presentCount,
+      lateCount,
+      absentCount,
+      attendanceRate,
+      details,
+    });
   });
 
   document.querySelectorAll('.att-mode-btn').forEach((btn) => {
