@@ -594,9 +594,12 @@ def register_account(payload: RegisterRequest, background_tasks: BackgroundTasks
             "field": "employeeId" if "employeeId" in conflicts else "email",
             "message": msg,
         }
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 
@@ -1411,9 +1414,12 @@ def enroll_student_face(payload: EnrollFaceRequest):
         conn.commit()
         rows = build_student_payloads(cur, existing[0])
         return {"success": True, "student": rows[0]}
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 
@@ -1427,9 +1433,12 @@ def delete_student(student_id: str):
         cur.execute("DELETE FROM Accounts WHERE UPPER(EmployeeId) = ?", (norm_id,))
         conn.commit()
         return {"success": True, "students": build_student_payloads(cur)}
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 
@@ -1544,9 +1553,12 @@ def record_attendance(payload: AttendanceRequest):
                 "device": payload.device,
             },
         }
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 
@@ -1593,9 +1605,12 @@ def save_attendance_session(payload: SaveAttendanceSessionRequest):
             "startedAt": started_at,
             "endedAt": ended_at,
         }
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 
@@ -1645,9 +1660,12 @@ def clear_attendance():
         cur.execute("DELETE FROM AttendanceLogs")
         conn.commit()
         return {"success": True}
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 
@@ -1750,9 +1768,12 @@ def migrate_legacy_data(payload: LegacyMigrateRequest):
 
         conn.commit()
         return {"success": True, "migrated": migrated}
-    except Exception:
+    except Exception as exc:
         conn.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail=f"Save session error ({type(exc).__name__}): {exc}",
+        )
     finally:
         conn.close()
 

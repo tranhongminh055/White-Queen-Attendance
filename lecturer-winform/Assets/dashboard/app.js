@@ -702,6 +702,98 @@
     ctx.restore();
   }
 
+  function drawFacialWireframe(ctx, landmarks) {
+    if (!landmarks) return;
+    const pts = landmarks.positions;
+    if (!pts || pts.length < 68) return;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
+    ctx.lineWidth = 1.1;
+
+    const connectRange = (start, end, close = false) => {
+      ctx.beginPath();
+      for (let i = start; i <= end; i++) {
+        if (i === start) ctx.moveTo(pts[i].x, pts[i].y);
+        else ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      if (close) ctx.closePath();
+      ctx.stroke();
+    };
+
+    connectRange(0, 16);        // Jawline
+    connectRange(17, 21);       // Left eyebrow
+    connectRange(22, 26);       // Right eyebrow
+    connectRange(27, 30);       // Nose bridge
+    connectRange(31, 35, true); // Nose base
+    connectRange(36, 41, true); // Left eye
+    connectRange(42, 47, true); // Right eye
+    connectRange(48, 59, true); // Outer lips
+    connectRange(60, 67, true); // Inner lips
+
+    // Mesh lines from eyes/nose to jaw for Face-Login cyber look
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.beginPath();
+    [[36, 0], [39, 27], [42, 27], [45, 16], [30, 48], [30, 54], [48, 8], [54, 8]].forEach(([a, b]) => {
+      ctx.moveTo(pts[a].x, pts[a].y);
+      ctx.lineTo(pts[b].x, pts[b].y);
+    });
+    ctx.stroke();
+
+    // Glowing landmark dots
+    ctx.fillStyle = '#67e8f9';
+    for (let i = 0; i < pts.length; i++) {
+      ctx.beginPath();
+      ctx.arc(pts[i].x, pts[i].y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function updateBiometricHud(hasFace, bestConf, matchedName) {
+    const s1 = document.getElementById('attStep1');
+    const s2 = document.getElementById('attStep2');
+    const s3 = document.getElementById('attStep3');
+    const s4 = document.getElementById('attStep4');
+    const confVal = document.getElementById('attHudConfVal');
+    const confFill = document.getElementById('attHudConfFill');
+    const confSub = document.getElementById('attHudConfSub');
+    const callout = document.getElementById('attOvalCalloutText');
+
+    if (hasFace) {
+      s1?.classList.add('done');
+      document.getElementById('attStep1Sub').textContent = 'HOÀN TẤT · 68 ĐIỂM';
+      s2?.classList.add('done');
+      document.getElementById('attStep2Sub').textContent = 'HOÀN TẤT · NGƯỜI THẬT';
+      s3?.classList.add('active');
+      callout.textContent = matchedName ? `ĐÃ KHỚP · ${matchedName.toUpperCase()}` : 'ĐANG QUÉT · 68 ĐIỂM';
+
+      if (bestConf > 0) {
+        const pct = Math.round(bestConf);
+        confVal.textContent = `${pct}%`;
+        confFill.style.width = `${pct}%`;
+        confSub.textContent = pct >= 85 ? 'TIN CẬY: RẤT CAO' : 'ĐANG ĐỐI CHIẾU...';
+        s4?.classList.toggle('done', Boolean(matchedName));
+        document.getElementById('attStep4Sub').textContent = matchedName ? `ĐÃ ĐIỂM DANH · ${matchedName}` : 'ĐANG CHỜ KHỚP';
+      } else {
+        confVal.textContent = '--%';
+        confFill.style.width = '30%';
+        confSub.textContent = 'CHƯA KHỚP HỒ SƠ';
+      }
+    } else {
+      s1?.classList.remove('done');
+      document.getElementById('attStep1Sub').textContent = 'ĐANG CHỜ KHUÔN MẶT';
+      s2?.classList.remove('done');
+      document.getElementById('attStep2Sub').textContent = 'ĐANG CHỜ';
+      s4?.classList.remove('done');
+      document.getElementById('attStep4Sub').textContent = 'SẴN SÀNG';
+      confVal.textContent = '--%';
+      confFill.style.width = '0%';
+      confSub.textContent = 'ĐANG CHỜ KHUÔN MẶT';
+      callout.textContent = 'ĐANG QUÉT · 68 ĐIỂM';
+    }
+  }
+
   let isScanningFrame = false;
   async function runFaceScanTick() {
     if (!attState.scanning || isScanningFrame || !attState.modelsLoaded) return;
@@ -724,7 +816,11 @@
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      let bestConf = 0;
+      let bestName = null;
+
       for (const det of detections) {
+        drawFacialWireframe(ctx, det.landmarks);
         const box = det.detection.box;
         if (!attState.faceMatcher) {
           drawHudFaceBox(ctx, box, 'scanning', 'Đang quét...', 'CHƯA CÓ DỮ LIỆU KHUÔN MẶT');
@@ -738,6 +834,10 @@
           const meta = attState.descriptorMeta.get(sid.toUpperCase());
           const conf = Math.min(99.9, Math.max(70, (1 - match.distance) * 100));
           const confStr = conf.toFixed(1);
+          if (conf > bestConf) {
+            bestConf = conf;
+            bestName = meta?.fullName || sid;
+          }
           drawHudFaceBox(ctx, box, 'matched', meta?.fullName || sid, `${sid} · ${confStr}%`);
 
           if (attState.mode === 'auto') {
@@ -749,8 +849,9 @@
         }
       }
 
+      updateBiometricHud(detections.length > 0, bestConf, bestName);
       const elapsed = Math.round(performance.now() - t0);
-      document.getElementById('attLatencyVal').textContent = `${elapsed}ms`;
+      document.getElementById('attLatencyVal').textContent = `${elapsed} ms`;
     } catch {
       // Skip transient frame error
     } finally {
@@ -797,19 +898,13 @@
     const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
 
     document.getElementById('attKpiTotal').textContent = total;
-    document.getElementById('attKpiPresent').textContent = present;
+    document.getElementById('attKpiPresent').textContent = checked;
     document.getElementById('attKpiAbsent').textContent = absent;
-    document.getElementById('attKpiLate').textContent = late;
 
-    document.getElementById('attScanProgressLabel').textContent = `${checked} / ${total} KHUÔN MẶT`;
+    document.getElementById('attScanProgressLabel').textContent = `${pct}%`;
     document.getElementById('attScanProgressFill').style.width = `${pct}%`;
-
-    const circ = 201.06;
-    document.getElementById('attDonutCircle').style.strokeDashoffset = circ - (circ * pct) / 100;
-    document.getElementById('attDonutPct').textContent = `${pct}%`;
-    document.getElementById('attLegPresent').textContent = present;
-    document.getElementById('attLegLate').textContent = late;
-    document.getElementById('attLegAbsent').textContent = absent;
+    document.getElementById('attPipelinePct').textContent = `${pct}%`;
+    document.getElementById('attPipelineBar').style.width = `${pct}%`;
 
     const q = (document.getElementById('attSearchInput')?.value || '').trim().toLowerCase();
     const listEl = document.getElementById('attStudentList');
@@ -1087,7 +1182,7 @@
       action: 'attendance_save_session',
       classId: attState.classId || '',
       className: attState.classObj?.className || '',
-      lecturerId: currentLecturer?.employeeId || '',
+      lecturerId: lecturerId || '',
       startedAt: attState.startedAt || new Date().toTimeString().slice(0, 8),
       endedAt: new Date().toTimeString().slice(0, 8),
       totalStudents,
