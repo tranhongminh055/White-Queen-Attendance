@@ -311,5 +311,61 @@ public sealed class ApiClient
             return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
         }
     }
+
+    public async Task<(bool Ok, string Json)> GetClassFaceDescriptorsRawAsync(string classId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/classes/{Uri.EscapeDataString(classId)}/face-descriptors");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "[]" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> GetClassAttendanceLogsRawAsync(string classId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/attendance?classId={Uri.EscapeDataString(classId)}");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "[]" : body);
+        }
+        catch
+        {
+            return (false, "[]");
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> RecordAttendanceRawAsync(
+        string studentId,
+        string studentName,
+        string classId,
+        double confidence,
+        string? avatar,
+        string device)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/attendance", new
+            {
+                studentId,
+                studentName,
+                classId,
+                confidence,
+                avatar,
+                device
+            });
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
 }
 

@@ -55,13 +55,17 @@
   }
 
   function switchView(viewName) {
+    if (viewName !== 'attendance' && typeof stopAttCamera === 'function') {
+      stopAttCamera();
+      if (typeof attState !== 'undefined' && attState.clockTimer) clearInterval(attState.clockTimer);
+    }
     document.querySelectorAll('.view-section').forEach((sec) => sec.classList.remove('active'));
     const target = document.getElementById(`view-${viewName}`);
     if (target) target.classList.add('active');
 
     document.querySelectorAll('.nav-item').forEach((b) => {
       const v = b.getAttribute('data-view');
-      b.classList.toggle('active', v === viewName || (viewName === 'create-class' && v === 'classes'));
+      b.classList.toggle('active', v === viewName || ((viewName === 'create-class' || viewName === 'attendance') && v === 'classes'));
     });
   }
 
@@ -165,8 +169,7 @@
     classesGrid.querySelectorAll('[data-attend]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-attend');
-        const cls = allClasses.find((c) => c.id === id);
-        showToast(`Lớp ${cls ? cls.className : id} sẵn sàng mở điểm danh ở bước tiếp theo!`);
+        openAttendancePage(id);
       });
     });
 
@@ -494,6 +497,528 @@
       )
       .join('');
   };
+
+  // =========================================================
+  // LIVE AI ATTENDANCE CONTROLLER (FIGMA 1:1 + FACE-API.JS)
+  // =========================================================
+  const attState = {
+    classId: null,
+    classObj: null,
+    students: [],
+    statusMap: new Map(), // UPPER(id) -> { status: 'present'|'late'|'absent', time: 'HH:MM:SS', confidence: 99.2 }
+    justCheckedId: null,
+    filter: 'all',
+    mode: 'auto', // 'auto' | 'manual'
+    scanning: false,
+    paused: false,
+    modelsLoaded: false,
+    faceMatcher: null,
+    descriptorMeta: new Map(), // UPPER(id) -> { fullName, avatar }
+    stream: null,
+    devices: [],
+    deviceIndex: 0,
+    clockTimer: null,
+    scanTimer: null,
+    inFlightIds: new Set(),
+    popupTimer: null,
+  };
+
+  function todayIsoLocal() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function startAttClock() {
+    if (attState.clockTimer) clearInterval(attState.clockTimer);
+    const days = ['CHỦ NHẬT', 'THỨ HAI', 'THỨ BA', 'THỨ TƯ', 'THỨ NĂM', 'THỨ SÁU', 'THỨ BẢY'];
+    const tick = () => {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      document.getElementById('attLiveClock').textContent = `${hh}:${mm}:${ss}`;
+      const dd = String(now.getDate()).padStart(2, '0');
+      const mo = String(now.getMonth() + 1).padStart(2, '0');
+      document.getElementById('attLiveDate').textContent = `${days[now.getDay()]} · ${dd}/${mo}/${now.getFullYear()}`;
+    };
+    tick();
+    attState.clockTimer = setInterval(tick, 1000);
+  }
+
+  function stopAttCamera() {
+    if (attState.scanTimer) {
+      clearInterval(attState.scanTimer);
+      attState.scanTimer = null;
+    }
+    if (attState.stream) {
+      attState.stream.getTracks().forEach((t) => t.stop());
+      attState.stream = null;
+    }
+    const video = document.getElementById('attVideo');
+    if (video) video.srcObject = null;
+    const canvas = document.getElementById('attOverlayCanvas');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    attState.scanning = false;
+    document.getElementById('attCameraShell')?.classList.remove('scanning');
+  }
+
+  async function ensureFaceModels() {
+    if (attState.modelsLoaded) return true;
+    if (typeof faceapi === 'undefined') {
+      document.getElementById('attCamPlaceholderText').textContent = 'Không tải được thư viện nhận diện khuôn mặt.';
+      return false;
+    }
+    const modelUrl = 'https://app.whitequeen.local/models';
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(modelUrl),
+      faceapi.nets.faceLandmark68Net.loadFromUri(modelUrl),
+      faceapi.nets.faceRecognitionNet.loadFromUri(modelUrl),
+    ]);
+    attState.modelsLoaded = true;
+    return true;
+  }
+
+  async function startAttCamera() {
+    const ph = document.getElementById('attCamPlaceholder');
+    const phText = document.getElementById('attCamPlaceholderText');
+    ph.classList.remove('hidden');
+    phText.textContent = 'Đang khởi tạo AI Camera & tải mô hình nhận diện...';
+
+    try {
+      await ensureFaceModels();
+      if (navigator.mediaDevices?.enumerateDevices) {
+        const all = await navigator.mediaDevices.enumerateDevices();
+        attState.devices = all.filter((d) => d.kind === 'videoinput');
+      }
+      if (attState.stream) {
+        attState.stream.getTracks().forEach((t) => t.stop());
+      }
+      const chosen = attState.devices[attState.deviceIndex];
+      const videoConstraints = chosen?.deviceId
+        ? { deviceId: { exact: chosen.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        : { width: { ideal: 1280 }, height: { ideal: 720 } };
+
+      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+      attState.stream = stream;
+      const video = document.getElementById('attVideo');
+      video.srcObject = stream;
+      await video.play();
+      ph.classList.add('hidden');
+      document.getElementById('attRecText').textContent = `REC CAM_0${attState.deviceIndex + 1} · HD · 30FPS`;
+      setAttScanning(true);
+    } catch (err) {
+      ph.classList.remove('hidden');
+      phText.textContent = `Không mở được camera (${err?.message || 'Chưa cấp quyền'}). Bạn vẫn có thể điểm danh Thủ công.`;
+      setAttScanning(false);
+    }
+  }
+
+  function setAttScanning(active) {
+    attState.scanning = active && !attState.paused;
+    const shell = document.getElementById('attCameraShell');
+    const pill = document.getElementById('attCamStatusPill');
+    const pillText = document.getElementById('attCamStatusText');
+    const btnMain = document.getElementById('btnAttStartStop');
+    const btnPause = document.getElementById('btnAttPause');
+
+    if (attState.scanning) {
+      shell.classList.add('scanning');
+      pill.classList.remove('paused');
+      pillText.textContent = 'AI ĐANG QUÉT TRỰC TIẾP';
+      btnMain.textContent = '⏹ Dừng quét';
+      btnPause.textContent = '⏸ Tạm dừng';
+      if (!attState.scanTimer) {
+        attState.scanTimer = setInterval(runFaceScanTick, 240);
+      }
+    } else {
+      shell.classList.remove('scanning');
+      pill.classList.add('paused');
+      pillText.textContent = attState.paused ? 'ĐÃ TẠM DỪNG' : 'CAMERA SẴN SÀNG';
+      btnMain.textContent = '▶ Bắt đầu điểm danh';
+      btnPause.textContent = attState.paused ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+      if (attState.scanTimer) {
+        clearInterval(attState.scanTimer);
+        attState.scanTimer = null;
+      }
+      const canvas = document.getElementById('attOverlayCanvas');
+      const ctx = canvas?.getContext('2d');
+      ctx && ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+
+  function drawHudFaceBox(ctx, box, styleType, title, subtitle) {
+    const colors = {
+      matched: { stroke: '#22c55e', bg: 'rgba(16, 185, 129, 0.92)', text: '#052e16' },
+      scanning: { stroke: '#22d3ee', bg: 'rgba(8, 145, 178, 0.88)', text: '#ecfeff' },
+      unknown: { stroke: '#f59e0b', bg: 'rgba(180, 83, 9, 0.88)', text: '#fffbeb' },
+    };
+    const c = colors[styleType] || colors.scanning;
+    const { x, y, width, height } = box;
+    const len = Math.max(12, Math.min(24, width * 0.2));
+
+    ctx.save();
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.45;
+    ctx.strokeRect(x, y, width, height);
+
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = 2.8;
+    ctx.shadowColor = c.stroke;
+    ctx.shadowBlur = 10;
+
+    // 4 corners
+    ctx.beginPath();
+    ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
+    ctx.moveTo(x + width - len, y); ctx.lineTo(x + width, y); ctx.lineTo(x + width, y + len);
+    ctx.moveTo(x, y + height - len); ctx.lineTo(x, y + height); ctx.lineTo(x + len, y + height);
+    ctx.moveTo(x + width - len, y + height); ctx.lineTo(x + width, y + height); ctx.lineTo(x + width, y + height - len);
+    ctx.stroke();
+
+    // Floating tag above face
+    ctx.shadowBlur = 0;
+    ctx.font = '700 12px "Segoe UI", sans-serif';
+    const w1 = ctx.measureText(title).width;
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    const w2 = ctx.measureText(subtitle).width;
+    const tagW = Math.max(w1, w2) + 18;
+    const tagH = 34;
+    const tagX = Math.max(4, x);
+    const tagY = Math.max(4, y - tagH - 6);
+
+    ctx.fillStyle = c.bg;
+    ctx.fillRect(tagX, tagY, tagW, tagH);
+    ctx.fillStyle = c.text;
+    ctx.font = '700 12px "Segoe UI", sans-serif';
+    ctx.fillText(title, tagX + 9, tagY + 14);
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    ctx.fillText(subtitle, tagX + 9, tagY + 28);
+    ctx.restore();
+  }
+
+  let isScanningFrame = false;
+  async function runFaceScanTick() {
+    if (!attState.scanning || isScanningFrame || !attState.modelsLoaded) return;
+    const video = document.getElementById('attVideo');
+    const canvas = document.getElementById('attOverlayCanvas');
+    if (!video || !canvas || video.readyState < 2 || !video.videoWidth) return;
+
+    isScanningFrame = true;
+    const t0 = performance.now();
+    try {
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
+      const detections = await faceapi
+        .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.45 }))
+        .withFaceLandmarks()
+        .withFaceDescriptors();
+
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const det of detections) {
+        const box = det.detection.box;
+        if (!attState.faceMatcher) {
+          drawHudFaceBox(ctx, box, 'scanning', 'Đang quét...', 'CHƯA CÓ DỮ LIỆU KHUÔN MẶT');
+          continue;
+        }
+        const match = attState.faceMatcher.findBestMatch(det.descriptor);
+        if (match.label === 'unknown') {
+          drawHudFaceBox(ctx, box, 'unknown', 'Chưa rõ', `ĐỘ KHỚP THẤP · ${Math.round((1 - match.distance) * 100)}%`);
+        } else {
+          const sid = match.label;
+          const meta = attState.descriptorMeta.get(sid.toUpperCase());
+          const conf = Math.min(99.9, Math.max(70, (1 - match.distance) * 100));
+          const confStr = conf.toFixed(1);
+          drawHudFaceBox(ctx, box, 'matched', meta?.fullName || sid, `${sid} · ${confStr}%`);
+
+          if (attState.mode === 'auto') {
+            const st = attState.statusMap.get(sid.toUpperCase());
+            if ((!st || st.status === 'absent') && !attState.inFlightIds.has(sid.toUpperCase())) {
+              triggerRecordAttendance(sid, meta?.fullName || sid, Number(confStr), 'Lecturer Desktop AI');
+            }
+          }
+        }
+      }
+
+      const elapsed = Math.round(performance.now() - t0);
+      document.getElementById('attLatencyVal').textContent = `${elapsed}ms`;
+    } catch {
+      // Skip transient frame error
+    } finally {
+      isScanningFrame = false;
+    }
+  }
+
+  function triggerRecordAttendance(studentId, fullName, confidence, device) {
+    const key = studentId.toUpperCase();
+    if (attState.inFlightIds.has(key)) return;
+    attState.inFlightIds.add(key);
+    const meta = attState.descriptorMeta.get(key);
+    postMsg({
+      action: 'attendance_record',
+      studentId,
+      studentName: fullName,
+      classId: attState.classId,
+      confidence,
+      avatar: meta?.avatar || null,
+      device,
+    });
+  }
+
+  function showCamMatchPopup(fullName, studentId, timeText) {
+    const toast = document.getElementById('attMatchToast');
+    document.getElementById('attMatchTitle').textContent = `${fullName} — Điểm danh thành công`;
+    document.getElementById('attMatchSub').textContent = `MSSV ${studentId} · ${timeText}`;
+    toast.classList.add('show');
+    if (attState.popupTimer) clearTimeout(attState.popupTimer);
+    attState.popupTimer = setTimeout(() => toast.classList.remove('show'), 3600);
+  }
+
+  function renderAttendanceUI() {
+    const total = attState.students.length;
+    let present = 0;
+    let late = 0;
+    attState.students.forEach((st) => {
+      const rec = attState.statusMap.get(st.id.toUpperCase());
+      if (rec?.status === 'present') present++;
+      else if (rec?.status === 'late') late++;
+    });
+    const checked = present + late;
+    const absent = Math.max(0, total - checked);
+    const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+    document.getElementById('attKpiTotal').textContent = total;
+    document.getElementById('attKpiPresent').textContent = present;
+    document.getElementById('attKpiAbsent').textContent = absent;
+    document.getElementById('attKpiLate').textContent = late;
+
+    document.getElementById('attScanProgressLabel').textContent = `${checked} / ${total} KHUÔN MẶT`;
+    document.getElementById('attScanProgressFill').style.width = `${pct}%`;
+
+    const circ = 201.06;
+    document.getElementById('attDonutCircle').style.strokeDashoffset = circ - (circ * pct) / 100;
+    document.getElementById('attDonutPct').textContent = `${pct}%`;
+    document.getElementById('attLegPresent').textContent = present;
+    document.getElementById('attLegLate').textContent = late;
+    document.getElementById('attLegAbsent').textContent = absent;
+
+    const q = (document.getElementById('attSearchInput')?.value || '').trim().toLowerCase();
+    const listEl = document.getElementById('attStudentList');
+    const filtered = attState.students.filter((st) => {
+      const rec = attState.statusMap.get(st.id.toUpperCase()) || { status: 'absent' };
+      if (attState.filter !== 'all' && rec.status !== attState.filter) return false;
+      if (q) {
+        return st.fullName.toLowerCase().includes(q) || st.id.toLowerCase().includes(q);
+      }
+      return true;
+    });
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div style="color:#64748b;text-align:center;padding:24px 8px;font-size:0.82rem;">Không có sinh viên phù hợp bộ lọc.</div>';
+      return;
+    }
+
+    listEl.innerHTML = filtered
+      .map((st) => {
+        const key = st.id.toUpperCase();
+        const rec = attState.statusMap.get(key) || { status: 'absent', time: 'Chưa điểm danh' };
+        const isPresent = rec.status === 'present' || rec.status === 'late';
+        const badgeLabel = rec.status === 'present' ? 'CÓ MẶT' : rec.status === 'late' ? 'ĐI MUỘN' : 'VẮNG';
+        const initials = (st.fullName || 'SV').trim().split(/\s+/).slice(-2).map((w) => w[0]?.toUpperCase() || '').join('');
+        const avatarHtml = st.avatar
+          ? `<img src="${escapeHtml(st.avatar)}" class="att-st-avatar" alt="" />`
+          : `<div class="att-st-avatar">${escapeHtml(initials || 'SV')}</div>`;
+        const flashClass = attState.justCheckedId === key ? 'just-checked' : '';
+        const manualBtn = !isPresent
+          ? `<button type="button" class="att-manual-btn" data-manual-checkin="${escapeHtml(st.id)}">✓ Điểm danh</button>`
+          : '';
+        return `
+          <div class="att-student-row ${isPresent ? 'is-present' : ''} ${flashClass}">
+            <div class="att-st-left">
+              ${avatarHtml}
+              <div class="att-st-info">
+                <div class="att-st-name">${escapeHtml(st.fullName)}</div>
+                <div class="att-st-sub">${escapeHtml(st.id)} · ${escapeHtml(rec.time)}</div>
+              </div>
+            </div>
+            <div class="att-st-actions">
+              ${manualBtn}
+              <span class="att-status-pill ${rec.status}">${badgeLabel}</span>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    listEl.querySelectorAll('[data-manual-checkin]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const sid = btn.getAttribute('data-manual-checkin');
+        const st = attState.students.find((x) => x.id.toUpperCase() === sid.toUpperCase());
+        triggerRecordAttendance(sid, st ? st.fullName : sid, 100.0, 'Manual (Lecturer)');
+      });
+    });
+  }
+
+  function openAttendancePage(classId) {
+    const cls = allClasses.find((c) => c.id === classId);
+    attState.classId = classId;
+    attState.classObj = cls || null;
+    attState.students = [];
+    attState.statusMap.clear();
+    attState.descriptorMeta.clear();
+    attState.faceMatcher = null;
+    attState.justCheckedId = null;
+    attState.paused = false;
+
+    document.getElementById('attClassName').textContent = cls ? cls.className : classId;
+    document.getElementById('attClassCode').textContent = cls ? cls.joinCode : '';
+    document.getElementById('attClassMeta').innerHTML = `
+      <span>📍 ${escapeHtml(cls?.roomText || 'Phòng học')}</span>
+      <span>·</span>
+      <span>🕒 ${escapeHtml(cls?.scheduleText || 'Lịch học')}</span>
+      <span>·</span>
+      <span>${escapeHtml(cls?.semester || '')}</span>
+    `;
+
+    switchView('attendance');
+    startAttClock();
+    renderAttendanceUI();
+    postMsg({ action: 'attendance_init', classId });
+    startAttCamera();
+  }
+
+  window.onAttendanceInit = function (res) {
+    if (res?.classId !== attState.classId) return;
+    attState.students = Array.isArray(res?.students) ? res.students : [];
+    const logs = Array.isArray(res?.logs) ? res.logs : [];
+    const descriptors = Array.isArray(res?.descriptors) ? res.descriptors : [];
+    const today = todayIsoLocal();
+
+    attState.statusMap.clear();
+    logs.forEach((log) => {
+      const ts = String(log.timestamp || '');
+      if (ts.includes(today)) {
+        const timePart = ts.split(' ')[0] || ts;
+        attState.statusMap.set(String(log.studentId).toUpperCase(), {
+          status: 'present',
+          time: timePart,
+          confidence: log.confidence || 99,
+        });
+      }
+    });
+
+    attState.descriptorMeta.clear();
+    if (typeof faceapi !== 'undefined' && descriptors.length > 0) {
+      const labeled = [];
+      descriptors.forEach((item) => {
+        if (!Array.isArray(item.descriptors) || !item.descriptors.length) return;
+        const floatList = item.descriptors.map((d) => new Float32Array(d));
+        labeled.push(new faceapi.LabeledFaceDescriptors(item.studentId, floatList));
+        attState.descriptorMeta.set(String(item.studentId).toUpperCase(), {
+          fullName: item.fullName,
+          avatar: item.avatar,
+        });
+      });
+      attState.faceMatcher = labeled.length ? new faceapi.FaceMatcher(labeled, 0.52) : null;
+    } else {
+      attState.faceMatcher = null;
+    }
+
+    renderAttendanceUI();
+  };
+
+  window.onAttendanceRecorded = function (res) {
+    const key = String(res?.studentId || '').toUpperCase();
+    attState.inFlightIds.delete(key);
+    if (!res?.ok) {
+      showToast('Không thể lưu điểm danh lên máy chủ.', 'error');
+      return;
+    }
+    const rec = res?.data?.record;
+    const timePart = String(rec?.timestamp || '').split(' ')[0] || new Date().toTimeString().slice(0, 8);
+    attState.statusMap.set(key, {
+      status: 'present',
+      time: timePart,
+      confidence: rec?.confidence || 99,
+    });
+    attState.justCheckedId = key;
+    renderAttendanceUI();
+    if (res?.data?.success) {
+      showCamMatchPopup(rec?.studentName || key, rec?.studentId || key, timePart);
+    }
+    postMsg({ action: 'dashboard_load_data' });
+  };
+
+  // Attendance View Controls
+  document.getElementById('btnBackFromAttendance')?.addEventListener('click', () => {
+    stopAttCamera();
+    if (attState.clockTimer) clearInterval(attState.clockTimer);
+    switchView('classes');
+  });
+
+  const togglePause = () => {
+    attState.paused = !attState.paused;
+    setAttScanning(!attState.paused);
+  };
+  document.getElementById('btnAttPause')?.addEventListener('click', togglePause);
+  document.getElementById('btnAttPauseBottom')?.addEventListener('click', togglePause);
+
+  document.getElementById('btnAttStartStop')?.addEventListener('click', () => {
+    if (attState.scanning) {
+      attState.paused = true;
+      setAttScanning(false);
+    } else {
+      attState.paused = false;
+      if (!attState.stream) startAttCamera();
+      else setAttScanning(true);
+    }
+  });
+
+  document.getElementById('btnAttSwitchCam')?.addEventListener('click', async () => {
+    if (attState.devices.length <= 1) {
+      showToast('Chỉ phát hiện 1 camera trên thiết bị.');
+      return;
+    }
+    attState.deviceIndex = (attState.deviceIndex + 1) % attState.devices.length;
+    await startAttCamera();
+  });
+
+  document.getElementById('btnAttFinish')?.addEventListener('click', () => {
+    stopAttCamera();
+    if (attState.clockTimer) clearInterval(attState.clockTimer);
+    showToast('Đã kết thúc phiên điểm danh và đồng bộ PostgreSQL.');
+    postMsg({ action: 'dashboard_load_data' });
+    switchView('classes');
+  });
+
+  document.querySelectorAll('.att-mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.att-mode-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      attState.mode = btn.getAttribute('data-mode') || 'auto';
+      showToast(attState.mode === 'auto' ? 'Đã chuyển sang chế độ AI Tự động.' : 'Đã chuyển sang chế độ Thủ công.');
+    });
+  });
+
+  document.querySelectorAll('.att-tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.att-tab').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      attState.filter = btn.getAttribute('data-filter') || 'all';
+      renderAttendanceUI();
+    });
+  });
+
+  document.getElementById('attSearchInput')?.addEventListener('input', renderAttendanceUI);
 
   renderLoadingSkeleton();
   postMsg({ action: 'dashboard_load_data' });

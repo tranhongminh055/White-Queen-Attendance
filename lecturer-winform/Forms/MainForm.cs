@@ -256,6 +256,36 @@ public sealed class MainForm : Form
                     break;
                 }
 
+                case "attendance_init":
+                {
+                    var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                    var studentsTask = _apiClient.GetClassStudentsRawAsync(classId);
+                    var logsTask = _apiClient.GetClassAttendanceLogsRawAsync(classId);
+                    var descTask = _apiClient.GetClassFaceDescriptorsRawAsync(classId);
+                    await Task.WhenAll(studentsTask, logsTask, descTask);
+                    var (sOk, sJson) = await studentsTask;
+                    var (_, lJson) = await logsTask;
+                    var (_, dJson) = await descTask;
+                    var payload = $"{{\"ok\":{(sOk ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"students\":{sJson},\"logs\":{lJson},\"descriptors\":{dJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceInit && window.onAttendanceInit({payload})");
+                    break;
+                }
+
+                case "attendance_record":
+                {
+                    var el = doc.RootElement;
+                    var studentId = el.TryGetProperty("studentId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
+                    var studentName = el.TryGetProperty("studentName", out var nEl) ? nEl.GetString() ?? string.Empty : string.Empty;
+                    var classId = el.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                    var confidence = el.TryGetProperty("confidence", out var cfEl) ? cfEl.GetDouble() : 99.0;
+                    var avatar = el.TryGetProperty("avatar", out var aEl) && aEl.ValueKind == JsonValueKind.String ? aEl.GetString() : null;
+                    var device = el.TryGetProperty("device", out var dvEl) ? dvEl.GetString() ?? "Lecturer Desktop AI" : "Lecturer Desktop AI";
+                    var (ok, respJson) = await _apiClient.RecordAttendanceRawAsync(studentId, studentName, classId, confidence, avatar, device);
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"studentId\":{JsonSerializer.Serialize(studentId)},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceRecorded && window.onAttendanceRecorded({payload})");
+                    break;
+                }
+
                 case "logout":
                     _currentLecturer = null;
                     NavigateTo("login/index.html");

@@ -379,6 +379,227 @@
           </div>
         </form>
       </section>
+
+      <!-- VIEW: LIVE AI ATTENDANCE (FIGMA) -->
+      <section class="view-section" id="view-attendance">
+        <!-- Top Breadcrumb & Camera Status -->
+        <div class="att-topbar">
+          <div class="cc-breadcrumb-row" style="margin-bottom: 0;">
+            <button type="button" class="btn-back-ghost" id="btnBackFromAttendance">← Quay lại</button>
+            <span class="cc-breadcrumb">LỚP HỌC <span class="sep">›</span> <span class="cyan-text">ĐIỂM DANH</span></span>
+          </div>
+          <div class="att-cam-pill" id="attCamStatusPill">
+            <span class="status-dot"></span>
+            <span id="attCamStatusText">CAMERA SẴN SÀNG</span>
+          </div>
+        </div>
+
+        <!-- Class Banner + Digital Clock + 4 KPI Cards -->
+        <div class="att-header-grid">
+          <div class="att-banner-card">
+            <div class="att-banner-left">
+              <div class="att-live-tag">
+                <span class="att-pulse-dot"></span>
+                <span>BUỔI HỌC ĐANG DIỄN RA</span>
+              </div>
+              <h1 class="att-class-title">
+                <span id="attClassName">--</span>
+                <span class="att-class-code" id="attClassCode">--</span>
+              </h1>
+              <div class="att-class-meta" id="attClassMeta">
+                <span>📍 --</span>
+                <span>·</span>
+                <span>🕒 --</span>
+              </div>
+            </div>
+            <div class="att-banner-right">
+              <div class="att-clock-label">THỜI GIAN THỰC</div>
+              <div class="att-clock-value" id="attLiveClock">00:00:00</div>
+              <div class="att-clock-date" id="attLiveDate">--</div>
+            </div>
+          </div>
+
+          <div class="att-kpi-card att-kpi-total">
+            <div class="att-kpi-top">
+              <span>SĨ SỐ</span>
+              <span class="att-kpi-ico">👥</span>
+            </div>
+            <div class="att-kpi-val" id="attKpiTotal">0</div>
+            <div class="att-kpi-bar"></div>
+          </div>
+
+          <div class="att-kpi-card att-kpi-present">
+            <div class="att-kpi-top">
+              <span>CÓ MẶT</span>
+              <span class="att-kpi-ico">✓</span>
+            </div>
+            <div class="att-kpi-val" id="attKpiPresent">0</div>
+            <div class="att-kpi-bar"></div>
+          </div>
+
+          <div class="att-kpi-card att-kpi-absent">
+            <div class="att-kpi-top">
+              <span>VẮNG</span>
+              <span class="att-kpi-ico">✕</span>
+            </div>
+            <div class="att-kpi-val" id="attKpiAbsent">0</div>
+            <div class="att-kpi-bar"></div>
+          </div>
+
+          <div class="att-kpi-card att-kpi-late">
+            <div class="att-kpi-top">
+              <span>ĐI MUỘN</span>
+              <span class="att-kpi-ico">⏱</span>
+            </div>
+            <div class="att-kpi-val" id="attKpiLate">0</div>
+            <div class="att-kpi-bar"></div>
+          </div>
+        </div>
+
+        <!-- 2-Column Main Workspace -->
+        <div class="att-workspace">
+          <!-- LEFT: Camera Viewport + Controls + Scan Progress -->
+          <div class="att-left-col">
+            <div class="att-camera-shell" id="attCameraShell">
+              <video id="attVideo" autoplay muted playsinline></video>
+              <canvas id="attOverlayCanvas"></canvas>
+
+              <!-- Cyber Grid & Laser Scanline -->
+              <div class="att-hud-grid"></div>
+              <div class="att-scan-laser" id="attScanLaser"></div>
+
+              <!-- 4 Corner Brackets -->
+              <span class="hud-corner tl"></span>
+              <span class="hud-corner tr"></span>
+              <span class="hud-corner bl"></span>
+              <span class="hud-corner br"></span>
+
+              <!-- Top Overlays -->
+              <div class="att-hud-top">
+                <div class="att-rec-badge" id="attRecBadge">
+                  <span class="att-rec-dot"></span>
+                  <span id="attRecText">REC CAM_01 · 1080P · 30FPS</span>
+                </div>
+                <div class="att-liveness-badge">
+                  <span>🛡 LIVENESS: BẬT</span>
+                </div>
+              </div>
+
+              <!-- Placeholder when camera is stopped/loading -->
+              <div class="att-cam-placeholder" id="attCamPlaceholder">
+                <div class="att-placeholder-ring"></div>
+                <div class="att-placeholder-text" id="attCamPlaceholderText">Đang khởi tạo AI Camera &amp; tải mô hình nhận diện...</div>
+              </div>
+
+              <!-- Bottom-Left Radar Sonar Widget -->
+              <div class="att-radar">
+                <div class="att-radar-sweep"></div>
+                <div class="att-radar-ring r1"></div>
+                <div class="att-radar-ring r2"></div>
+                <div class="att-radar-dot"></div>
+              </div>
+
+              <!-- Bottom-Right Live Recognition Popup -->
+              <div class="att-match-toast" id="attMatchToast">
+                <div class="att-match-check">✓</div>
+                <div class="att-match-body">
+                  <div class="att-match-title" id="attMatchTitle">-- — Điểm danh thành công</div>
+                  <div class="att-match-sub" id="attMatchSub">MSSV -- · --</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Camera Control Bar -->
+            <div class="att-controls-bar">
+              <div class="att-ctrl-left">
+                <button type="button" class="btn-secondary" id="btnAttPause">⏸ Tạm dừng</button>
+                <button type="button" class="btn-secondary" id="btnAttSwitchCam">🔄 Đổi camera</button>
+                <div class="att-mode-toggle">
+                  <button type="button" class="att-mode-btn active" data-mode="auto" id="btnModeAuto">⚡ TỰ ĐỘNG</button>
+                  <button type="button" class="att-mode-btn" data-mode="manual" id="btnModeManual">✋ THỦ CÔNG</button>
+                </div>
+              </div>
+
+              <div class="att-ctrl-metrics">
+                <div class="att-metric-item">
+                  <span>CHÍNH XÁC <strong class="cyan-text" id="attAccuracyVal">99.2%</strong></span>
+                  <div class="att-mini-track"><div class="att-mini-fill" style="width: 96%;"></div></div>
+                </div>
+                <div class="att-metric-item">
+                  <span>ĐỘ TRỄ <strong class="emerald-text" id="attLatencyVal">--ms</strong></span>
+                  <div class="att-mini-track"><div class="att-mini-fill emerald" style="width: 35%;"></div></div>
+                </div>
+              </div>
+
+              <button type="button" class="btn-primary-cyan" id="btnAttStartStop">▶ Bắt đầu điểm danh</button>
+            </div>
+
+            <!-- Class Scan Progress Bar -->
+            <div class="att-progress-card">
+              <div class="att-progress-head">
+                <span>TIẾN ĐỘ QUÉT LỚP</span>
+                <span class="cyan-text" id="attScanProgressLabel">0 / 0 KHUÔN MẶT</span>
+              </div>
+              <div class="att-progress-track">
+                <div class="att-progress-fill" id="attScanProgressFill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Live Attendance List + Donut Summary -->
+          <aside class="att-right-col">
+            <div class="att-list-head">
+              <div>
+                <div class="att-live-mini">
+                  <span class="att-pulse-dot emerald"></span>
+                  <span>TRỰC TIẾP · Live</span>
+                </div>
+                <h3>Danh sách điểm danh trực tiếp</h3>
+              </div>
+            </div>
+
+            <div class="search-box att-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" id="attSearchInput" placeholder="Tìm theo tên hoặc MSSV..." />
+            </div>
+
+            <div class="att-filter-tabs">
+              <button type="button" class="att-tab active" data-filter="all">TẤT CẢ</button>
+              <button type="button" class="att-tab" data-filter="present">CÓ MẶT</button>
+              <button type="button" class="att-tab" data-filter="absent">VẮNG</button>
+              <button type="button" class="att-tab" data-filter="late">MUỘN</button>
+            </div>
+
+            <div class="att-student-list" id="attStudentList"></div>
+
+            <!-- Bottom Summary & Actions -->
+            <div class="att-summary-card">
+              <div class="att-donut-row">
+                <div class="att-donut-wrap">
+                  <svg viewBox="0 0 80 80" class="att-donut-svg">
+                    <circle cx="40" cy="40" r="32" class="att-donut-bg" />
+                    <circle cx="40" cy="40" r="32" class="att-donut-fg" id="attDonutCircle" stroke-dasharray="201.06" stroke-dashoffset="201.06" />
+                  </svg>
+                  <div class="att-donut-pct" id="attDonutPct">0%</div>
+                </div>
+                <div class="att-donut-legend">
+                  <div class="att-legend-title">TỈ LỆ THAM DỰ</div>
+                  <div class="att-legend-row"><span class="dot emerald"></span><span>CÓ MẶT</span><strong id="attLegPresent">0</strong></div>
+                  <div class="att-legend-row"><span class="dot amber"></span><span>ĐI MUỘN</span><strong id="attLegLate">0</strong></div>
+                  <div class="att-legend-row"><span class="dot rose"></span><span>VẮNG</span><strong id="attLegAbsent">0</strong></div>
+                </div>
+              </div>
+
+              <button type="button" class="btn-primary-cyan att-btn-full" id="btnAttFinish">⏹ Kết thúc Điểm danh</button>
+              <button type="button" class="btn-secondary att-btn-full" id="btnAttPauseBottom">⏸ Tạm Dừng Điểm danh</button>
+              <div class="att-security-note">🛡 DỮ LIỆU SINH TRẮC HỌC ĐƯỢC MÃ HÓA ĐẦU CUỐI</div>
+            </div>
+          </aside>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -400,6 +621,7 @@
   <!-- TOAST -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <script src="https://app.whitequeen.local/face-login/face-api.js"></script>
   <script src="app.js"></script>
 </body>
 

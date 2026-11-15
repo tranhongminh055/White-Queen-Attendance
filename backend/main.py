@@ -1211,6 +1211,47 @@ def get_class_students(class_id: str):
         conn.close()
 
 
+@app.get("/api/classes/{class_id}/face-descriptors")
+def get_class_face_descriptors(class_id: str):
+    cid = class_id.strip().upper()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT a.EmployeeId, a.FullName, s.AvatarDataUrl, f.DescriptorJson
+            FROM ClassMembers m
+            INNER JOIN Accounts a ON UPPER(a.EmployeeId) = UPPER(m.StudentId)
+            INNER JOIN FaceEmbeddings f ON UPPER(f.StudentId) = UPPER(m.StudentId)
+            LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(m.StudentId)
+            WHERE UPPER(m.ClassId) = ?
+            ORDER BY a.EmployeeId ASC
+            """,
+            (cid,),
+        )
+        grouped: dict[str, dict[str, Any]] = {}
+        for row in cur.fetchall():
+            sid = str(row[0])
+            key = sid.upper()
+            try:
+                desc = json.loads(row[3]) if row[3] else None
+            except Exception:
+                desc = None
+            if not isinstance(desc, list) or len(desc) != 128:
+                continue
+            if key not in grouped:
+                grouped[key] = {
+                    "studentId": sid,
+                    "fullName": row[1] or sid,
+                    "avatar": row[2],
+                    "descriptors": [],
+                }
+            grouped[key]["descriptors"].append([float(v) for v in desc])
+        return list(grouped.values())
+    finally:
+        conn.close()
+
+
 @app.get("/api/lecturers/{lecturer_id}/attendance-summary")
 def get_lecturer_attendance_summary(lecturer_id: str):
     lid = lecturer_id.strip().upper()
