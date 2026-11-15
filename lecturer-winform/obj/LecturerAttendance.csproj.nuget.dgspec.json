@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {}
+    "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {}
   },
   "projects": {
-    "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {
+    "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
+        "projectUniqueName": "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
         "projectName": "WhiteQueenLecturer",
-        "projectPath": "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
+        "projectPath": "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
         "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-        "outputPath": "g:\\White Queen\\lecturer-winform\\obj\\",
+        "outputPath": "G:\\White Queen\\lecturer-winform\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "D:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
