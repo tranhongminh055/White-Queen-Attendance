@@ -933,9 +933,6 @@
           ? `<img src="${escapeHtml(st.avatar)}" class="att-st-avatar" alt="" />`
           : `<div class="att-st-avatar">${escapeHtml(initials || 'SV')}</div>`;
         const flashClass = attState.justCheckedId === key ? 'just-checked' : '';
-        const manualBtn = !isPresent
-          ? `<button type="button" class="att-manual-btn" data-manual-checkin="${escapeHtml(st.id)}">✓ Điểm danh</button>`
-          : '';
         return `
           <div class="att-student-row ${isPresent ? 'is-present' : ''} ${flashClass}">
             <div class="att-st-left">
@@ -946,21 +943,12 @@
               </div>
             </div>
             <div class="att-st-actions">
-              ${manualBtn}
               <span class="att-status-pill ${rec.status}">${badgeLabel}</span>
             </div>
           </div>
         `;
       })
       .join('');
-
-    listEl.querySelectorAll('[data-manual-checkin]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const sid = btn.getAttribute('data-manual-checkin');
-        const st = attState.students.find((x) => x.id.toUpperCase() === sid.toUpperCase());
-        triggerRecordAttendance(sid, st ? st.fullName : sid, 100.0, 'Manual (Lecturer)');
-      });
-    });
   }
 
   function openAttendancePage(classId) {
@@ -1191,15 +1179,6 @@
       absentCount,
       attendanceRate,
       details,
-    });
-  });
-
-  document.querySelectorAll('.att-mode-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.att-mode-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      attState.mode = btn.getAttribute('data-mode') || 'auto';
-      showToast(attState.mode === 'auto' ? 'Đã chuyển sang chế độ AI Tự động.' : 'Đã chuyển sang chế độ Thủ công.');
     });
   });
 
