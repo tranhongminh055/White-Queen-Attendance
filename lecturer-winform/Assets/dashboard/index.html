@@ -221,56 +221,179 @@
           </div>
         </div>
       </section>
+
+      <!-- VIEW: CREATE CLASS PAGE (FIGMA 1:1) -->
+      <section class="view-section" id="view-create-class">
+        <div class="cc-top-nav">
+          <button type="button" class="btn-secondary" id="btnBackToClasses">← Quay lại</button>
+          <span class="cc-breadcrumb">DASHBOARD / LỚP HỌC / <strong>TẠO MỚI</strong></span>
+        </div>
+
+        <header class="topbar cc-header">
+          <div>
+            <div class="kicker">— KHỞI TẠO LỚP HỌC</div>
+            <h1 class="page-title">Tạo lớp học <span class="cyan-text">mới</span></h1>
+          </div>
+
+          <div class="stepper">
+            <div class="step-item done" id="step1">
+              <span class="step-badge">01</span>
+              <span>Thông tin</span>
+            </div>
+            <span class="step-line"></span>
+            <div class="step-item active" id="step2">
+              <span class="step-badge">02</span>
+              <span>Import SV</span>
+            </div>
+            <span class="step-line"></span>
+            <div class="step-item" id="step3">
+              <span class="step-badge">03</span>
+              <span>Xác nhận</span>
+            </div>
+          </div>
+        </header>
+
+        <form id="createClassForm" class="cc-stack">
+          <!-- CARD 01: CLASS INFO -->
+          <div class="cc-card">
+            <div class="cc-card-head">
+              <span class="cc-num">01</span>
+              <div>
+                <h3>Thông tin lớp học</h3>
+                <p>NHẬP THÔNG TIN CƠ BẢN VÀ MÃ THAM GIA</p>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>TÊN LỚP / MÔN HỌC *</label>
+              <input type="text" id="inputClassName" required placeholder="VD: CMU - CS 453 AGIS" />
+            </div>
+
+            <div class="field">
+              <label>MÃ LỚP / JOIN CODE</label>
+              <div class="code-gen-row">
+                <input type="text" id="inputJoinCode" placeholder="VD: AGIS-7K2Q (để trống tự sinh)" maxlength="24" style="text-transform: uppercase" />
+                <button type="button" class="btn-gen-code" id="btnGenJoinCode">↻ Tự sinh mã</button>
+              </div>
+              <div class="code-hint">● Mã khả dụng ✓ · Tự động kiểm tra trùng lặp</div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>HỌC KỲ</label>
+                <input type="text" id="inputSemester" value="HK1 2025-2026" />
+              </div>
+              <div class="field">
+                <label>PHÒNG HỌC</label>
+                <input type="text" id="inputRoom" placeholder="VD: Phòng B3-204" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label>LỊCH HỌC</label>
+              <input type="text" id="inputSchedule" placeholder="VD: Thứ 3 · 07:30 - 09:30" />
+            </div>
+          </div>
+
+          <!-- CARD 02: IMPORT STUDENTS -->
+          <div class="cc-card">
+            <div class="cc-card-head">
+              <span class="cc-num">02</span>
+              <div>
+                <h3>Import danh sách sinh viên vào lớp</h3>
+                <p>TẢI FILE CSV / TXT HOẶC DÁN MSSV — HỆ THỐNG ĐỐI CHIẾU POSTGRESQL</p>
+              </div>
+            </div>
+
+            <!-- 02.A UPLOAD -->
+            <div class="cc-subhead">
+              <span>02.A · TẢI FILE DANH SÁCH</span>
+              <button type="button" class="link-btn" id="btnDownloadSampleCsv">⬇ Tải file mẫu (.CSV)</button>
+            </div>
+
+            <div class="drop-zone" id="csvDropZone">
+              <div class="drop-left">
+                <div class="drop-icon">☁</div>
+                <div>
+                  <div class="drop-title">Kéo thả file vào đây hoặc <span class="cyan-text">Chọn file</span></div>
+                  <div class="drop-sub">.CSV, .TXT — TỰ ĐỘNG TÁCH CỘT MSSV (CÓ THỂ XUẤT TỪ EXCEL)</div>
+                </div>
+              </div>
+              <input type="file" id="csvFileInput" accept=".csv,.txt" hidden />
+              <button type="button" class="btn-secondary" id="btnPickCsv">📁 Chọn file</button>
+            </div>
+
+            <div class="file-progress-box" id="fileProgressBox" style="display: none;">
+              <div class="fp-top">
+                <span id="fpFileName">danh_sach_sv.csv</span>
+                <span class="cyan-text" id="fpStatus">100% · ĐÃ ĐỌC 0 DÒNG</span>
+              </div>
+              <div class="fp-track"><div class="fp-fill" id="fpFill"></div></div>
+            </div>
+
+            <!-- 02.B QUICK ADD -->
+            <div class="cc-subhead" style="margin-top: 18px;">
+              <span>⚡ 02.B · THÊM NHANH THỦ CÔNG</span>
+            </div>
+
+            <div class="quick-add-row">
+              <textarea id="quickAddInput" rows="2" placeholder="Dán nhiều MSSV: SV-7142, 20215042 ... hoặc mỗi MSSV một dòng"></textarea>
+              <button type="button" class="btn-add-list" id="btnQuickAdd">+ Thêm vào danh sách</button>
+            </div>
+
+            <!-- 02.C PREVIEW TABLE -->
+            <div class="preview-header">
+              <div>
+                <div class="cc-subhead" style="margin:0 0 4px;"><span>02.C · XEM TRƯỚC DANH SÁCH IMPORT</span></div>
+                <div class="preview-title">Xem trước · <span id="previewTotalCount">0</span> sinh viên</div>
+              </div>
+              <div class="preview-tools">
+                <span class="db-badge">Kiểm tra thời gian thực PostgreSQL</span>
+                <button type="button" class="btn-secondary" id="btnReverifyList">↻ Kiểm tra lại</button>
+              </div>
+            </div>
+
+            <div class="filter-bar">
+              <div class="filter-tabs" id="importFilterTabs">
+                <button type="button" class="ftab active" data-filter="all">Tất cả (<span id="cntAll">0</span>)</button>
+                <button type="button" class="ftab" data-filter="face_ok">Đã có khuôn mặt (<span id="cntFaceOk">0</span>)</button>
+                <button type="button" class="ftab" data-filter="no_acc">Thiếu tài khoản (<span id="cntNoAcc">0</span>)</button>
+                <button type="button" class="ftab" data-filter="no_face">Thiếu khuôn mặt (<span id="cntNoFace">0</span>)</button>
+              </div>
+              <input type="text" id="previewSearchInput" class="preview-search" placeholder="🔍 Tìm tên / MSSV" />
+            </div>
+
+            <div class="panel-box">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>SINH VIÊN</th>
+                    <th>MSSV</th>
+                    <th>TÀI KHOẢN</th>
+                    <th>KHUÔN MẶT</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="previewTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="modal-error" id="createClassError"></div>
+
+          <!-- BOTTOM STICKY ACTION BAR -->
+          <div class="cc-bottom-bar">
+            <button type="button" class="btn-secondary" id="btnCancelCreate">← Hủy / Quay lại</button>
+            <div class="cc-summary-text">
+              <span class="status-dot"></span>
+              <span><strong id="validAssignCount">0</strong> sinh viên hợp lệ sẽ được gán vào lớp · PostgreSQL</span>
+            </div>
+            <button type="submit" class="btn-primary-cyan" id="btnSubmitCreate">Tạo lớp học & Lưu danh sách SV →</button>
+          </div>
+        </form>
+      </section>
     </main>
-  </div>
-
-  <!-- MODAL: CREATE CLASS -->
-  <div class="modal-backdrop" id="createClassModal">
-    <div class="modal-card">
-      <div class="modal-head">
-        <div>
-          <div class="kicker">— NEW CLASS</div>
-          <h2>Tạo lớp học mới</h2>
-        </div>
-        <button type="button" class="modal-close" id="btnCloseCreateModal">✕</button>
-      </div>
-
-      <form id="createClassForm" class="modal-form">
-        <div class="field">
-          <label>TÊN LỚP / MÔN HỌC *</label>
-          <input type="text" id="inputClassName" required placeholder="VD: Nhập môn Trí tuệ nhân tạo" />
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label>MÃ LỚP / JOIN CODE (ĐỂ TRỐNG TỰ SINH)</label>
-            <input type="text" id="inputJoinCode" placeholder="VD: WQ-K21A" maxlength="24" style="text-transform: uppercase" />
-          </div>
-          <div class="field">
-            <label>HỌC KỲ</label>
-            <input type="text" id="inputSemester" value="HK1 2025-2026" />
-          </div>
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label>LỊCH HỌC</label>
-            <input type="text" id="inputSchedule" placeholder="VD: Thứ 2, 07:30 - 09:30" />
-          </div>
-          <div class="field">
-            <label>PHÒNG HỌC</label>
-            <input type="text" id="inputRoom" placeholder="VD: Phòng B3.12" />
-          </div>
-        </div>
-
-        <div class="modal-error" id="createClassError"></div>
-
-        <div class="modal-foot">
-          <button type="button" class="btn-secondary" id="btnCancelCreate">Hủy</button>
-          <button type="submit" class="btn-primary-cyan" id="btnSubmitCreate">Tạo lớp học →</button>
-        </div>
-      </form>
-    </div>
   </div>
 
   <!-- MODAL: VIEW CLASS STUDENTS -->

@@ -162,6 +162,11 @@ class CreateClassRequest(BaseModel):
     lecturerId: str = Field(..., min_length=2, max_length=32)
     scheduleText: str = Field(default="", max_length=160)
     roomText: str = Field(default="", max_length=80)
+    studentIds: list[str] = Field(default_factory=list)
+
+
+class LookupStudentsRequest(BaseModel):
+    studentIds: list[str] = Field(default_factory=list)
 
 
 class JoinClassRequest(BaseModel):
@@ -926,6 +931,29 @@ def create_class(payload: CreateClassRequest):
                 payload.roomText.strip(),
             ),
         )
+
+        added_count = 0
+        seen_ids: set[str] = set()
+        for raw_sid in payload.studentIds:
+            sid = str(raw_sid or "").strip().upper()
+            if not sid or sid in seen_ids:
+                continue
+            seen_ids.add(sid)
+            cur.execute("SELECT EmployeeId FROM Accounts WHERE UPPER(EmployeeId) = ?", (sid,))
+            acc_row = cur.fetchone()
+            if not acc_row:
+                continue
+            cur.execute(
+                "SELECT Id FROM ClassMembers WHERE UPPER(ClassId) = ? AND UPPER(StudentId) = ?",
+                (class_id.upper(), acc_row[0].upper()),
+            )
+            if not cur.fetchone():
+                cur.execute(
+                    "INSERT INTO ClassMembers (ClassId, StudentId) VALUES (?, ?)",
+                    (class_id, acc_row[0]),
+                )
+                added_count += 1
+
         conn.commit()
         return {
             "id": class_id,
@@ -936,7 +964,7 @@ def create_class(payload: CreateClassRequest):
             "lecturerName": lecturer[1],
             "scheduleText": payload.scheduleText.strip(),
             "roomText": payload.roomText.strip(),
-            "totalStudents": 0,
+            "totalStudents": added_count,
         }
     finally:
         conn.close()
@@ -1064,6 +1092,65 @@ def leave_class(student_id: str, class_id: str):
             raise HTTPException(status_code=404, detail="Bạn chưa tham gia lớp học này.")
         conn.commit()
         return {"left": True, "classId": cid}
+    finally:
+        conn.close()
+
+
+@app.post("/api/students/lookup")
+def lookup_students(payload: LookupStudentsRequest):
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in payload.studentIds:
+        sid = str(raw or "").strip().upper()
+        if sid and sid not in seen:
+            seen.add(sid)
+            cleaned.append(sid)
+
+    if not cleaned:
+        return []
+
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        placeholders = ",".join("?" for _ in cleaned)
+        cur.execute(
+            f"""
+            SELECT a.EmployeeId, a.FullName, a.Email, a.Role,
+                   COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated,
+                   s.AvatarDataUrl
+            FROM Accounts a
+            LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(a.EmployeeId)
+            WHERE UPPER(a.EmployeeId) IN ({placeholders})
+            """,
+            tuple(cleaned),
+        )
+        found = {}
+        for row in cur.fetchall():
+            found[str(row[0]).upper()] = {
+                "id": row[0],
+                "exists": True,
+                "fullName": row[1],
+                "email": row[2],
+                "role": row[3] or "student",
+                "embeddingCreated": bool(row[4]),
+                "avatar": row[5],
+            }
+
+        return [
+            found.get(
+                sid,
+                {
+                    "id": sid,
+                    "exists": False,
+                    "fullName": "Không xác định",
+                    "email": "",
+                    "role": "",
+                    "embeddingCreated": False,
+                    "avatar": None,
+                },
+            )
+            for sid in cleaned
+        ]
     finally:
         conn.close()
 

@@ -190,16 +190,31 @@ public sealed class MainForm : Form
                 {
                     var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
                     string Str(string key) => doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? string.Empty : string.Empty;
+                    var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
+                        ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
+                        : Array.Empty<string>();
                     var (ok, respJson) = await _apiClient.CreateClassRawAsync(
                         lecturerId,
                         Str("className"),
                         Str("joinCode"),
                         Str("semester"),
                         Str("scheduleText"),
-                        Str("roomText")
+                        Str("roomText"),
+                        studentIds
                     );
                     var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
                     await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassCreated && window.onClassCreated({payload})");
+                    break;
+                }
+
+                case "students_lookup":
+                {
+                    var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
+                        ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
+                        : Array.Empty<string>();
+                    var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(studentIds);
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({payload})");
                     break;
                 }
 

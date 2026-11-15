@@ -246,7 +246,8 @@ public sealed class ApiClient
         string joinCode,
         string semester,
         string scheduleText,
-        string roomText)
+        string roomText,
+        string[] studentIds)
     {
         try
         {
@@ -257,10 +258,25 @@ public sealed class ApiClient
                 joinCode = string.IsNullOrWhiteSpace(joinCode) ? null : joinCode,
                 semester = string.IsNullOrWhiteSpace(semester) ? "HK1 2025-2026" : semester,
                 scheduleText,
-                roomText
+                roomText,
+                studentIds
             });
             var body = await resp.Content.ReadAsStringAsync();
             return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
+    public async Task<(bool Ok, string Json)> LookupStudentsRawAsync(string[] studentIds)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/students/lookup", new { studentIds });
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "[]" : body);
         }
         catch (Exception ex)
         {
