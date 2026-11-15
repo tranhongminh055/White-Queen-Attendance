@@ -1109,47 +1109,72 @@ def lookup_students(payload: LookupStudentsRequest):
     if not cleaned:
         return []
 
-    conn = get_connection()
-    try:
-        cur = conn.cursor()
-        placeholders = ",".join("?" for _ in cleaned)
-        cur.execute(
-            f"""
-            SELECT a.EmployeeId, a.FullName, a.Email, a.Role,
-                   COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated
-            FROM Accounts a
-            LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(a.EmployeeId)
-            WHERE UPPER(a.EmployeeId) IN ({placeholders})
-            """,
-            tuple(cleaned),
-        )
-        found = {}
-        for row in cur.fetchall():
-            found[str(row[0]).upper()] = {
-                "id": row[0],
-                "exists": True,
-                "fullName": row[1],
-                "email": row[2],
-                "role": row[3] or "student",
-                "embeddingCreated": bool(row[4]),
-            }
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            if DB_ENGINE == "postgresql":
+                cur.execute(
+                    """
+                    SELECT a.EmployeeId, a.FullName, a.Email, a.Role,
+                           COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated
+                    FROM Accounts a
+                    LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(a.EmployeeId)
+                    WHERE UPPER(a.EmployeeId) = ANY(?)
+                    """,
+                    (cleaned,),
+                )
+            else:
+                placeholders = ",".join("?" for _ in cleaned)
+                cur.execute(
+                    f"""
+                    SELECT a.EmployeeId, a.FullName, a.Email, a.Role,
+                           COALESCE(s.EmbeddingCreated, 0) AS EmbeddingCreated
+                    FROM Accounts a
+                    LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(a.EmployeeId)
+                    WHERE UPPER(a.EmployeeId) IN ({placeholders})
+                    """,
+                    tuple(cleaned),
+                )
+            found = {}
+            for row in cur.fetchall():
+                found[str(row[0]).upper()] = {
+                    "id": row[0],
+                    "exists": True,
+                    "fullName": row[1],
+                    "email": row[2],
+                    "role": row[3] or "student",
+                    "embeddingCreated": bool(row[4]),
+                }
 
-        return [
-            found.get(
-                sid,
-                {
-                    "id": sid,
-                    "exists": False,
-                    "fullName": "Không xác định",
-                    "email": "",
-                    "role": "",
-                    "embeddingCreated": False,
-                },
-            )
-            for sid in cleaned
-        ]
-    finally:
-        conn.close()
+            return [
+                found.get(
+                    sid,
+                    {
+                        "id": sid,
+                        "exists": False,
+                        "fullName": "Không xác định",
+                        "email": "",
+                        "role": "",
+                        "embeddingCreated": False,
+                    },
+                )
+                for sid in cleaned
+            ]
+        except Exception as exc:
+            last_exc = exc
+            if hasattr(conn, "mark_broken"):
+                conn.mark_broken()
+            if attempt == 0:
+                continue
+        finally:
+            conn.close()
+
+    raise HTTPException(
+        status_code=500,
+        detail=f"Lookup error ({type(last_exc).__name__}): {last_exc}",
+    )
 
 
 @app.get("/api/classes/{class_id}/students")
