@@ -126,6 +126,7 @@ class LoginRequest(BaseModel):
 class FaceLoginRequest(BaseModel):
     descriptor: list[float]
     maxDistance: float = Field(default=0.5, ge=0.2, le=0.9)
+    requiredRole: str | None = None
 
 
 class EnrollFaceRequest(BaseModel):
@@ -780,14 +781,19 @@ def face_login(payload: FaceLoginRequest):
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute(
-            """
+        base_sql = """
             SELECT f.StudentId, f.DescriptorJson, s.FullName, s.ClassId, s.Email, s.AvatarDataUrl, a.Role
             FROM FaceEmbeddings f
             INNER JOIN StudentProfiles s ON s.StudentId = f.StudentId
             LEFT JOIN Accounts a ON a.EmployeeId = f.StudentId
             """
-        )
+        if payload.requiredRole:
+            cur.execute(
+                base_sql + " WHERE LOWER(COALESCE(a.Role, 'student')) = LOWER(?)",
+                (payload.requiredRole.strip(),),
+            )
+        else:
+            cur.execute(base_sql)
         rows = cur.fetchall()
         if not rows:
             return {"matched": False, "distance": None, "hasEnrolled": False}

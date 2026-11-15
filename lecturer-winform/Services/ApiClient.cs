@@ -136,7 +136,8 @@ public sealed class ApiClient
             var response = await _http.PostAsJsonAsync("/api/auth/face-login", new
             {
                 descriptor,
-                maxDistance
+                maxDistance,
+                requiredRole = "lecturer"
             });
 
             var json = await response.Content.ReadAsStringAsync();
