@@ -354,6 +354,141 @@
         <div class="hist-classes-grid" id="historySessionsGrid"></div>
       </section>
 
+      <!-- VIEW: ATTENDANCE HISTORY (STEP 3: SESSION DETAIL TABLE - FIGMA 1:1) -->
+      <section class="view-section" id="view-history-detail">
+        <div class="hist-breadcrumb-bar">
+          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span id="hdBreadCode">--</span> <span class="sep">/</span> <span id="hdBreadSession">BUỔI 01</span> <span class="sep">/</span> <span class="cyan-text">BẢNG ĐIỂM DANH</span></span>
+          <button type="button" class="btn-secondary hist-refresh-btn" id="btnBackToHistorySessions">← QUAY LẠI DANH SÁCH BUỔI</button>
+        </div>
+
+        <header class="hs-header">
+          <div class="hs-header-left">
+            <div class="hist-step-kicker">
+              <span class="hist-kicker-line"></span>
+              <span>BƯỚC 3/3 · BẢNG ĐIỂM DANH</span>
+              <span class="att-class-code" id="hdClassCode">--</span>
+              <span class="hd-class-name-sub" id="hdClassNameSub">--</span>
+            </div>
+            <h1 class="hist-title" id="hdTitle">Buổi 01 · <span class="cyan-text">Bảng điểm danh</span></h1>
+            <div class="att-class-meta" id="hdMeta">📅 -- · 🕒 -- · 📍 -- · 👥 0 SINH VIÊN</div>
+          </div>
+
+          <div class="hd-export-actions">
+            <button type="button" class="btn-primary-cyan" id="btnHdExportCsv">⬇ XUẤT EXCEL</button>
+            <button type="button" class="btn-secondary" id="btnHdPrint">🖨 IN BÁO CÁO</button>
+          </div>
+        </header>
+
+        <!-- 5 KPI Cards -->
+        <div class="hd-kpi-grid">
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">SĨ SỐ</div>
+            <div class="hist-kpi-val" id="hdKpiTotal">0</div>
+            <div class="hist-kpi-sub">SINH VIÊN</div>
+          </div>
+
+          <div class="hist-kpi-card hist-kpi-highlight">
+            <div class="hist-kpi-label cyan-text">CÓ MẶT</div>
+            <div class="hist-kpi-val cyan-text" id="hdKpiPresent">0</div>
+            <div class="hist-kpi-progress">
+              <div class="hist-kpi-progress-fill" id="hdKpiPresentBar" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">ĐI TRỄ</div>
+            <div class="hist-kpi-val" id="hdKpiLate">0</div>
+            <div class="hs-kpi-mini-line amber"></div>
+          </div>
+
+          <div class="hist-kpi-card">
+            <div class="hist-kpi-label">VẮNG</div>
+            <div class="hist-kpi-val" id="hdKpiAbsent">0</div>
+            <div class="hs-kpi-mini-line rose"></div>
+          </div>
+
+          <div class="hist-kpi-card hd-rate-card">
+            <div class="hist-ring-wrap">
+              <svg viewBox="0 0 44 44" class="hist-ring-svg">
+                <circle cx="22" cy="22" r="18" class="hist-ring-bg" />
+                <circle cx="22" cy="22" r="18" class="hist-ring-fg" id="hdRateRing" stroke-dasharray="113.1" stroke-dashoffset="113.1" />
+              </svg>
+              <div class="hist-ring-text">✓</div>
+            </div>
+            <div>
+              <div class="hist-kpi-label">TỈ LỆ</div>
+              <div class="hd-rate-val cyan-text" id="hdKpiRate">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3-Step Stepper -->
+        <div class="hist-stepper">
+          <button type="button" class="hist-step done hs-step-btn" id="btnHdStep1">
+            <span class="hist-step-num">✓</span>
+            <span class="hist-step-label">CHỌN LỚP</span>
+          </button>
+          <span class="hist-step-line done"></span>
+          <button type="button" class="hist-step done hs-step-btn" id="btnHdStep2">
+            <span class="hist-step-num">✓</span>
+            <span class="hist-step-label">CHỌN BUỔI</span>
+          </button>
+          <span class="hist-step-line done"></span>
+          <div class="hist-step active">
+            <span class="hist-step-num">3</span>
+            <span class="hist-step-label">BẢNG ĐIỂM DANH</span>
+          </div>
+        </div>
+
+        <!-- Search, Status Filters, Sort -->
+        <div class="hs-toolbar">
+          <div class="hd-toolbar-left">
+            <div class="search-box hist-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input type="text" id="hdSearchInput" placeholder="Tìm MSSV hoặc tên..." />
+            </div>
+            <div class="hs-filter-pills">
+              <button type="button" class="hs-pill active" data-hd-filter="all" id="hdTabAll">TẤT CẢ · 0</button>
+              <button type="button" class="hs-pill" data-hd-filter="present" id="hdTabPresent">CÓ MẶT · 0</button>
+              <button type="button" class="hs-pill" data-hd-filter="late" id="hdTabLate">ĐI TRỄ · 0</button>
+              <button type="button" class="hs-pill" data-hd-filter="absent" id="hdTabAbsent">VẮNG · 0</button>
+            </div>
+          </div>
+
+          <select class="cc-select hs-sort-select" id="hdSortSelect">
+            <option value="stt">⇅ Theo STT</option>
+            <option value="name">⇅ Theo tên A-Z</option>
+            <option value="time">⇅ Giờ vào sớm nhất</option>
+          </select>
+        </div>
+
+        <!-- Attendance Detail Table -->
+        <div class="panel-box hd-table-box">
+          <table class="data-table hd-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>SINH VIÊN</th>
+                <th>MSSV</th>
+                <th>GIỜ VÀO</th>
+                <th>PHƯƠNG THỨC</th>
+                <th>ĐỘ TIN CẬY</th>
+                <th>TRẠNG THÁI</th>
+              </tr>
+            </thead>
+            <tbody id="hdTableBody"></tbody>
+          </table>
+
+          <div class="hd-pagination-bar">
+            <div class="hd-page-info" id="hdPageInfo">HIỂN THỊ 0 / 0</div>
+            <div class="hd-page-btns" id="hdPageBtns"></div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW: EXPORT REPORT -->
       <section class="view-section" id="view-export">
         <header class="topbar">

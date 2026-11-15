@@ -71,7 +71,7 @@
         'active',
         v === viewName ||
           ((viewName === 'create-class' || viewName === 'attendance') && v === 'classes') ||
-          (viewName === 'history-sessions' && v === 'history')
+          ((viewName === 'history-sessions' || viewName === 'history-detail') && v === 'history')
       );
     });
   }
@@ -435,7 +435,7 @@
         const latestTag = s.isLatest ? '<span class="hs-latest-badge">MỚI NHẤT</span>' : '';
 
         return `
-          <article class="hs-session-card ${isSel}" data-hs-session="${escapeHtml(s.id)}" style="animation-delay:${idx * 55}ms">
+          <article class="hs-session-card ${isSel}" data-hs-session="${escapeHtml(s.id)}" data-hs-seq="${s.seqNum}" style="animation-delay:${idx * 55}ms">
             <div class="hs-card-head">
               <div class="hs-session-num">
                 <span>BUỔI ${numStr}</span>
@@ -473,10 +473,11 @@
     grid.querySelectorAll('[data-hs-session]').forEach((card) => {
       card.addEventListener('click', () => {
         const sid = card.getAttribute('data-hs-session');
+        const seqNum = Number(card.getAttribute('data-hs-seq') || 1);
         selectedSessionId = sid;
         grid.querySelectorAll('.hs-session-card').forEach((c) => c.classList.remove('selected'));
         card.classList.add('selected');
-        showToast('Đã chọn buổi học — sẵn sàng Bước 3: Bảng điểm danh chi tiết!');
+        openHistoryDetailPage(sid, seqNum);
       });
     });
   }
@@ -494,6 +495,344 @@
   document.getElementById('hsSortSelect')?.addEventListener('change', (e) => {
     hsSort = e.target.value || 'newest';
     renderHistorySessions();
+  });
+
+  // ── Lịch sử điểm danh — Bước 3: Bảng điểm danh chi tiết ──
+  const hdState = {
+    sessionId: null,
+    seqNum: 1,
+    detail: null,
+    filter: 'all',
+    search: '',
+    sort: 'stt',
+    page: 1,
+    pageSize: 12,
+  };
+
+  function getHdInitials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return 'SV';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  function parseConfidencePct(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+    const str = String(raw).replace('%', '').trim();
+    const num = parseFloat(str);
+    if (Number.isNaN(num)) return null;
+    return num <= 1 ? Math.round(num * 1000) / 10 : Math.round(num * 10) / 10;
+  }
+
+  function openHistoryDetailPage(sessionId, seqNum) {
+    hdState.sessionId = sessionId;
+    hdState.seqNum = seqNum || 1;
+    hdState.detail = null;
+    hdState.filter = 'all';
+    hdState.search = '';
+    hdState.sort = 'stt';
+    hdState.page = 1;
+
+    const searchInput = document.getElementById('hdSearchInput');
+    if (searchInput) searchInput.value = '';
+    const sortSel = document.getElementById('hdSortSelect');
+    if (sortSel) sortSel.value = 'stt';
+    document.querySelectorAll('[data-hd-filter]').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-hd-filter') === 'all');
+    });
+
+    const cls = (state.classes || []).find((c) => c.id === selectedHistoryClassId);
+    const sessSummary = (attendanceSessions || []).find((s) => s.id === sessionId);
+    const seqStr = String(hdState.seqNum).padStart(2, '0');
+    const classCode = cls?.id || sessSummary?.classId || '—';
+    const className = cls?.name || sessSummary?.className || '';
+    const dateTxt = sessSummary ? formatDateVi(sessSummary.sessionDate) : '—';
+    const timeTxt = sessSummary ? `${sessSummary.startedAt || '—'} - ${sessSummary.endedAt || '—'}` : '—';
+    const roomTxt = cls?.room || '—';
+    const totTxt = sessSummary?.totalStudents ?? '—';
+
+    const setTxt = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = v;
+    };
+    setTxt('hdBreadCode', classCode);
+    setTxt('hdBreadSession', `Buổi ${seqStr}`);
+    setTxt('hdClassCode', classCode);
+    setTxt('hdClassNameSub', className);
+    setTxt('hdTitle', `Buổi ${seqStr} · ${className || classCode}`);
+    setTxt('hdMeta', `${dateTxt} · ${timeTxt} · ${roomTxt} · ${totTxt} sinh viên`);
+
+    const tbody = document.getElementById('hdTableBody');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="8" class="hd-empty-cell">Đang tải dữ liệu điểm danh từ PostgreSQL...</td></tr>';
+    }
+    setTxt('hdPageInfo', 'Đang tải...');
+    const pgBtns = document.getElementById('hdPageBtns');
+    if (pgBtns) pgBtns.innerHTML = '';
+
+    switchView('history-detail');
+    postMsg({ action: 'history_session_detail', sessionId });
+  }
+
+  window.onHistorySessionDetail = function (res) {
+    if (!res || !res.ok || !res.data) {
+      showToast('Không thể tải chi tiết buổi điểm danh từ máy chủ.', true);
+      const tbody = document.getElementById('hdTableBody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="8" class="hd-empty-cell">Không thể tải dữ liệu buổi điểm danh.</td></tr>';
+      }
+      return;
+    }
+
+    const d = res.data;
+    hdState.detail = d;
+
+    const seqStr = String(hdState.seqNum).padStart(2, '0');
+    const cls = (state.classes || []).find((c) => c.id === (d.classId || selectedHistoryClassId));
+    const roomTxt = cls?.room || '—';
+    const setTxt = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = v;
+    };
+
+    setTxt('hdBreadCode', d.classId || '—');
+    setTxt('hdBreadSession', `Buổi ${seqStr}`);
+    setTxt('hdClassCode', d.classId || '—');
+    setTxt('hdClassNameSub', d.className || '');
+    setTxt('hdTitle', `Buổi ${seqStr} · ${d.className || d.classId}`);
+    setTxt(
+      'hdMeta',
+      `${formatDateVi(d.sessionDate)} · ${d.startedAt || '—'} - ${d.endedAt || '—'} · ${roomTxt} · ${d.totalStudents || 0} sinh viên`
+    );
+
+    const details = Array.isArray(d.details) ? d.details : [];
+    const total = Number(d.totalStudents || details.length || 0);
+    const present = Number(d.presentCount ?? details.filter((x) => x.status === 'present').length);
+    const late = Number(d.lateCount ?? details.filter((x) => x.status === 'late').length);
+    const absent = Number(d.absentCount ?? details.filter((x) => x.status === 'absent').length);
+    const rate = total > 0 ? Math.round(((present + late) / total) * 1000) / 10 : Number(d.attendanceRate || 0);
+
+    setTxt('hdKpiTotal', String(total));
+    setTxt('hdKpiPresent', String(present));
+    setTxt('hdKpiLate', String(late));
+    setTxt('hdKpiAbsent', String(absent));
+    setTxt('hdKpiRate', `${rate}%`);
+
+    const presentPct = total > 0 ? Math.min(100, Math.round((present / total) * 1000) / 10) : 0;
+    const presentBar = document.getElementById('hdKpiPresentBar');
+    if (presentBar) presentBar.style.width = `${presentPct}%`;
+
+    const ring = document.getElementById('hdRateRing');
+    if (ring) {
+      const circumference = 113.1;
+      ring.style.strokeDashoffset = String(circumference * (1 - Math.min(100, Math.max(0, rate)) / 100));
+    }
+
+    setTxt('hdTabAll', `TẤT CẢ · ${details.length}`);
+    setTxt('hdTabPresent', `CÓ MẶT · ${present}`);
+    setTxt('hdTabLate', `ĐI TRỄ · ${late}`);
+    setTxt('hdTabAbsent', `VẮNG · ${absent}`);
+
+    hdState.page = 1;
+    renderHistoryDetailTable();
+  };
+
+  function getFilteredSortedDetailRows() {
+    const details = Array.isArray(hdState.detail?.details) ? [...hdState.detail.details] : [];
+    const q = hdState.search.trim().toLowerCase();
+
+    const filtered = details.filter((item) => {
+      if (hdState.filter !== 'all' && item.status !== hdState.filter) return false;
+      if (q) {
+        const nameMatch = String(item.fullName || '').toLowerCase().includes(q);
+        const idMatch = String(item.studentId || '').toLowerCase().includes(q);
+        if (!nameMatch && !idMatch) return false;
+      }
+      return true;
+    });
+
+    if (hdState.sort === 'name') {
+      filtered.sort((a, b) => String(a.fullName || '').localeCompare(String(b.fullName || ''), 'vi'));
+    } else if (hdState.sort === 'time') {
+      filtered.sort((a, b) => {
+        const ta = a.time || '99:99:99';
+        const tb = b.time || '99:99:99';
+        return ta.localeCompare(tb);
+      });
+    } else {
+      filtered.sort((a, b) => Number(a.stt || 0) - Number(b.stt || 0));
+    }
+    return filtered;
+  }
+
+  function renderHistoryDetailTable() {
+    const tbody = document.getElementById('hdTableBody');
+    const pageInfo = document.getElementById('hdPageInfo');
+    const pageBtns = document.getElementById('hdPageBtns');
+    if (!tbody) return;
+
+    const rows = getFilteredSortedDetailRows();
+    const totalRows = rows.length;
+    const totalPages = Math.max(1, Math.ceil(totalRows / hdState.pageSize));
+    if (hdState.page > totalPages) hdState.page = totalPages;
+    if (hdState.page < 1) hdState.page = 1;
+
+    if (!totalRows) {
+      tbody.innerHTML = '<tr><td colspan="8" class="hd-empty-cell">Không tìm thấy sinh viên phù hợp.</td></tr>';
+      if (pageInfo) pageInfo.textContent = 'HIỂN THỊ 0 / 0';
+      if (pageBtns) pageBtns.innerHTML = '';
+      return;
+    }
+
+    const startIdx = (hdState.page - 1) * hdState.pageSize;
+    const pageRows = rows.slice(startIdx, startIdx + hdState.pageSize);
+    const endIdx = startIdx + pageRows.length;
+
+    tbody.innerHTML = pageRows
+      .map((item, idx) => {
+        const sttStr = String(item.stt || startIdx + idx + 1).padStart(2, '0');
+        const avatarHtml = item.avatar
+          ? `<img class="hd-avatar" src="${escapeHtml(item.avatar)}" alt="" />`
+          : `<div class="hd-avatar-fallback">${escapeHtml(getHdInitials(item.fullName))}</div>`;
+
+        const timeDisplay = item.time ? escapeHtml(item.time) : '—';
+        const timeCls = item.status === 'late' ? 'hd-time late' : 'hd-time';
+
+        const isManual = String(item.device || '').toLowerCase().includes('thủ công');
+        const methodText = item.status === 'absent' ? 'Chưa điểm danh' : item.device || 'Nhận diện khuôn mặt';
+        const methodDotCls = item.status === 'absent' ? 'absent' : isManual ? 'manual' : 'ai';
+
+        const confPct = parseConfidencePct(item.confidence);
+        const confHtml =
+          confPct !== null
+            ? `<div class="hd-conf-wrap">
+                 <span class="hd-conf-val">${confPct.toFixed(1)}%</span>
+                 <div class="hd-conf-bar"><div class="hd-conf-fill" style="width:${Math.min(100, confPct)}%"></div></div>
+               </div>`
+            : `<div class="hd-conf-wrap"><span class="hd-conf-val muted">—</span><div class="hd-conf-bar"></div></div>`;
+
+        const statusMap = {
+          present: { cls: 'present', label: 'CÓ MẶT' },
+          late: { cls: 'late', label: 'ĐI TRỄ' },
+          absent: { cls: 'absent', label: 'VẮNG' },
+        };
+        const stMeta = statusMap[item.status] || statusMap.absent;
+
+        return `
+          <tr class="hd-row" style="animation-delay:${idx * 28}ms">
+            <td class="hd-stt">${sttStr}</td>
+            <td>
+              <div class="hd-student-cell">
+                ${avatarHtml}
+                <span class="hd-student-name">${escapeHtml(item.fullName || item.studentId)}</span>
+              </div>
+            </td>
+            <td class="hd-mssv">${escapeHtml(item.studentId || '—')}</td>
+            <td class="${timeCls}">${timeDisplay}</td>
+            <td>
+              <div class="hd-method">
+                <span class="hd-method-dot ${methodDotCls}"></span>
+                <span>${escapeHtml(methodText)}</span>
+              </div>
+            </td>
+            <td>${confHtml}</td>
+            <td><span class="hd-status-badge ${stMeta.cls}">${stMeta.label}</span></td>
+            <td class="hd-more">···</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    if (pageInfo) {
+      pageInfo.textContent = `HIỂN THỊ ${startIdx + 1}-${endIdx} / ${totalRows}`;
+    }
+
+    if (pageBtns) {
+      const btns = [];
+      btns.push(`<button type="button" class="hd-page-btn" data-hd-page="${hdState.page - 1}" ${hdState.page <= 1 ? 'disabled' : ''}>‹</button>`);
+      for (let p = 1; p <= totalPages; p++) {
+        btns.push(`<button type="button" class="hd-page-btn ${p === hdState.page ? 'active' : ''}" data-hd-page="${p}">${p}</button>`);
+      }
+      btns.push(`<button type="button" class="hd-page-btn" data-hd-page="${hdState.page + 1}" ${hdState.page >= totalPages ? 'disabled' : ''}>›</button>`);
+      pageBtns.innerHTML = btns.join('');
+      pageBtns.querySelectorAll('[data-hd-page]').forEach((b) => {
+        b.addEventListener('click', () => {
+          const target = Number(b.getAttribute('data-hd-page'));
+          if (!b.disabled && target >= 1 && target <= totalPages && target !== hdState.page) {
+            hdState.page = target;
+            renderHistoryDetailTable();
+          }
+        });
+      });
+    }
+  }
+
+  document.getElementById('btnBackToHistorySessions')?.addEventListener('click', () => switchView('history-sessions'));
+  document.getElementById('btnHdStep1')?.addEventListener('click', () => switchView('history'));
+  document.getElementById('btnHdStep2')?.addEventListener('click', () => switchView('history-sessions'));
+
+  document.querySelectorAll('[data-hd-filter]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-hd-filter]').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      hdState.filter = btn.getAttribute('data-hd-filter') || 'all';
+      hdState.page = 1;
+      renderHistoryDetailTable();
+    });
+  });
+
+  document.getElementById('hdSearchInput')?.addEventListener('input', (e) => {
+    hdState.search = e.target.value || '';
+    hdState.page = 1;
+    renderHistoryDetailTable();
+  });
+
+  document.getElementById('hdSortSelect')?.addEventListener('change', (e) => {
+    hdState.sort = e.target.value || 'stt';
+    hdState.page = 1;
+    renderHistoryDetailTable();
+  });
+
+  document.getElementById('btnHdPrint')?.addEventListener('click', () => {
+    window.print();
+  });
+
+  document.getElementById('btnHdExportCsv')?.addEventListener('click', () => {
+    if (!hdState.detail || !Array.isArray(hdState.detail.details)) {
+      showToast('Chưa có dữ liệu điểm danh để xuất.', true);
+      return;
+    }
+    const headers = ['STT', 'MSSV', 'Họ và tên', 'Giờ vào', 'Phương thức', 'Độ tin cậy', 'Trạng thái'];
+    const stLabel = { present: 'Có mặt', late: 'Đi trễ', absent: 'Vắng' };
+    const escCsv = (val) => `"${String(val ?? '').replace(/"/g, '""')}"`;
+    const lines = [headers.map(escCsv).join(',')];
+    hdState.detail.details.forEach((item, idx) => {
+      const conf = parseConfidencePct(item.confidence);
+      lines.push(
+        [
+          item.stt || idx + 1,
+          item.studentId || '',
+          item.fullName || '',
+          item.time || '',
+          item.device || '',
+          conf !== null ? `${conf.toFixed(1)}%` : '',
+          stLabel[item.status] || item.status || '',
+        ]
+          .map(escCsv)
+          .join(',')
+      );
+    });
+    const csvContent = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `diem_danh_${hdState.detail.classId || 'lop'}_buoi_${String(hdState.seqNum).padStart(2, '0')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Đã xuất file Excel (CSV) bảng điểm danh!');
   });
 
   // ===== DEDICATED CREATE CLASS PAGE =====

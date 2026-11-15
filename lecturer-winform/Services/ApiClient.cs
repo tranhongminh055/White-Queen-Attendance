@@ -254,6 +254,20 @@ public sealed class ApiClient
         }
     }
 
+    public async Task<(bool Ok, string Json)> GetAttendanceSessionDetailRawAsync(string sessionId)
+    {
+        try
+        {
+            var resp = await _http.GetAsync($"/api/attendance/sessions/{Uri.EscapeDataString(sessionId)}");
+            var body = await resp.Content.ReadAsStringAsync();
+            return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
+        }
+        catch (Exception ex)
+        {
+            return (false, JsonSerializer.Serialize(new { detail = ex.Message }));
+        }
+    }
+
     public async Task<(bool Ok, string Json)> CreateClassRawAsync(
         string lecturerId,
         string className,

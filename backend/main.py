@@ -1652,6 +1652,82 @@ def get_lecturer_attendance_sessions(lecturer_id: str):
         conn.close()
 
 
+@app.get("/api/attendance/sessions/{session_id}")
+def get_attendance_session_detail(session_id: str):
+    sid = session_id.strip()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT Id, ClassId, ClassName, SessionDate, StartedAt, EndedAt,
+                   TotalStudents, PresentCount, LateCount, AbsentCount, AttendanceRate, DetailsJson
+            FROM AttendanceSessions
+            WHERE Id = ?
+            """,
+            (sid,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy buổi điểm danh.")
+
+        class_id = row[1]
+        session_date = row[3]
+        details = json.loads(row[11] or "[]")
+
+        # Enrich with Confidence, Device, AvatarDataUrl from AttendanceLogs & StudentProfiles
+        cur.execute(
+            """
+            SELECT UPPER(l.StudentId), l.Confidence, l.Device, COALESCE(l.AvatarDataUrl, s.AvatarDataUrl)
+            FROM AttendanceLogs l
+            LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(l.StudentId)
+            WHERE UPPER(l.ClassId) = UPPER(?) AND l.ScannedDate = ?
+            """,
+            (class_id, session_date),
+        )
+        log_map = {}
+        for lr in cur.fetchall():
+            log_map[str(lr[0]).upper()] = {
+                "confidence": lr[1] or "",
+                "device": lr[2] or "Nhận diện khuôn mặt",
+                "avatar": lr[3] or None,
+            }
+
+        enriched = []
+        for idx, item in enumerate(details):
+            st_id = str(item.get("studentId") or "").strip()
+            meta = log_map.get(st_id.upper(), {})
+            enriched.append(
+                {
+                    "stt": idx + 1,
+                    "studentId": st_id,
+                    "fullName": item.get("fullName") or st_id,
+                    "status": item.get("status") or "absent",
+                    "time": item.get("time") or "",
+                    "confidence": item.get("confidence") or meta.get("confidence") or "",
+                    "device": item.get("device") or meta.get("device") or ("Nhận diện khuôn mặt" if item.get("status") != "absent" else "—"),
+                    "avatar": meta.get("avatar"),
+                }
+            )
+
+        return {
+            "id": row[0],
+            "classId": class_id,
+            "className": row[2],
+            "sessionDate": session_date.isoformat() if hasattr(session_date, "isoformat") else str(session_date),
+            "startedAt": row[4],
+            "endedAt": row[5],
+            "totalStudents": row[6],
+            "presentCount": row[7],
+            "lateCount": row[8],
+            "absentCount": row[9],
+            "attendanceRate": row[10],
+            "details": enriched,
+        }
+    finally:
+        conn.close()
+
+
 @app.delete("/api/attendance")
 def clear_attendance():
     conn = get_connection()

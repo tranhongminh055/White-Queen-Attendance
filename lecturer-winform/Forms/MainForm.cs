@@ -299,6 +299,15 @@ public sealed class MainForm : Form
                     break;
                 }
 
+                case "history_session_detail":
+                {
+                    var sessionId = doc.RootElement.TryGetProperty("sessionId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
+                    var (ok, respJson) = await _apiClient.GetAttendanceSessionDetailRawAsync(sessionId);
+                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"sessionId\":{JsonSerializer.Serialize(sessionId)},\"data\":{respJson}}}";
+                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onHistorySessionDetail && window.onHistorySessionDetail({payload})");
+                    break;
+                }
+
                 case "speak_vi":
                 {
                     var text = doc.RootElement.TryGetProperty("text", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
