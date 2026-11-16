@@ -982,30 +982,7 @@ def create_class(payload: CreateClassRequest):
                 (class_id, rsid, rname, remail),
             )
 
-        added_count = 0
-        seen_ids: set[str] = set()
-        for raw_sid in payload.studentIds:
-            sid = re.sub(r"[\x00-\x1f\x7f]+", "", str(raw_sid or "")).strip().upper()
-            if not sid or sid in seen_ids:
-                continue
-            seen_ids.add(sid)
-            cur.execute("SELECT EmployeeId FROM Accounts WHERE UPPER(EmployeeId) = ?", (sid,))
-            acc_row = cur.fetchone()
-            if not acc_row:
-                continue
-            cur.execute(
-                "SELECT Id FROM ClassMembers WHERE UPPER(ClassId) = ? AND UPPER(StudentId) = ?",
-                (class_id.upper(), acc_row[0].upper()),
-            )
-            if not cur.fetchone():
-                cur.execute(
-                    "INSERT INTO ClassMembers (ClassId, StudentId) VALUES (?, ?)",
-                    (class_id, acc_row[0]),
-                )
-                added_count += 1
-
         conn.commit()
-        final_expected = max(expected_total, added_count)
         return {
             "id": class_id,
             "className": payload.className.strip(),
@@ -1015,8 +992,8 @@ def create_class(payload: CreateClassRequest):
             "lecturerName": lecturer[1],
             "scheduleText": payload.scheduleText.strip(),
             "roomText": payload.roomText.strip(),
-            "totalStudents": added_count,
-            "expectedTotal": final_expected,
+            "totalStudents": 0,
+            "expectedTotal": expected_total,
         }
     finally:
         conn.close()
