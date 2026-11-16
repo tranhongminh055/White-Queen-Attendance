@@ -25,3 +25,4 @@ backups/
 lecturer-winform/bin/
 lecturer-winform/obj/
 lecturer-winform/publish/
+web-frontend/public/downloads/*.msi
