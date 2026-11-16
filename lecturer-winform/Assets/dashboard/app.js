@@ -1885,9 +1885,11 @@
       return;
     }
     setCsvUploadError('', true);
-    document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${validDbCount}/${importedStudents.length} MSSV HỢP LỆ`;
+    const totalRead = importedStudents.length;
+    const pendingCount = Math.max(0, totalRead - validDbCount);
+    document.getElementById('fpStatus').textContent = `✓ AI ĐÃ ĐỌC ${totalRead} MSSV · ${validDbCount} ĐÃ CÓ TK · ${pendingCount} CHỜ JOIN`;
     renderPreviewStudents();
-    showToast(`Đã kiểm tra ${validDbCount}/${importedStudents.length} sinh viên hợp lệ từ PostgreSQL.`);
+    showToast(`AI đã đọc đủ ${totalRead} MSSV (${validDbCount} đã có tài khoản, ${pendingCount} chờ sinh viên tự join).`);
   };
 
   window.onClassCreated = function (res) {
