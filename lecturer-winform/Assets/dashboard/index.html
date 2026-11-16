@@ -258,8 +258,11 @@
       <!-- VIEW: ATTENDANCE HISTORY (STEP 2: SELECT SESSION - FIGMA 1:1) -->
       <section class="view-section" id="view-history-sessions">
         <div class="hist-breadcrumb-bar">
-          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span id="hsBreadCode">--</span> <span class="sep">/</span> <span class="cyan-text">CHỌN BUỔI</span> <span class="sep">/</span> BẢNG ĐIỂM DANH</span>
-          <button type="button" class="btn-secondary hist-refresh-btn" id="btnBackToHistoryClasses">← QUAY LẠI DANH SÁCH LỚP</button>
+          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span id="hsBreadCode">--</span>
+            <span class="sep">/</span> <span class="cyan-text">CHỌN BUỔI</span> <span class="sep">/</span> BẢNG ĐIỂM
+            DANH</span>
+          <button type="button" class="btn-secondary hist-refresh-btn" id="btnBackToHistoryClasses">← QUAY LẠI DANH SÁCH
+            LỚP</button>
         </div>
 
         <header class="hs-header">
@@ -277,7 +280,8 @@
             <div class="hist-ring-wrap hs-ring-lg">
               <svg viewBox="0 0 44 44" class="hist-ring-svg">
                 <circle cx="22" cy="22" r="18" class="hist-ring-bg" />
-                <circle cx="22" cy="22" r="18" class="hist-ring-fg" id="hsRatingRing" stroke-dasharray="113.1" stroke-dashoffset="113.1" />
+                <circle cx="22" cy="22" r="18" class="hist-ring-fg" id="hsRatingRing" stroke-dasharray="113.1"
+                  stroke-dashoffset="113.1" />
               </svg>
               <div class="hist-ring-text" id="hsRatingPct">0%</div>
             </div>
@@ -357,8 +361,11 @@
       <!-- VIEW: ATTENDANCE HISTORY (STEP 3: SESSION DETAIL TABLE - FIGMA 1:1) -->
       <section class="view-section" id="view-history-detail">
         <div class="hist-breadcrumb-bar">
-          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span id="hdBreadCode">--</span> <span class="sep">/</span> <span id="hdBreadSession">BUỔI 01</span> <span class="sep">/</span> <span class="cyan-text">BẢNG ĐIỂM DANH</span></span>
-          <button type="button" class="btn-secondary hist-refresh-btn" id="btnBackToHistorySessions">← QUAY LẠI DANH SÁCH BUỔI</button>
+          <span class="cc-breadcrumb">LỊCH SỬ ĐIỂM DANH <span class="sep">/</span> <span id="hdBreadCode">--</span>
+            <span class="sep">/</span> <span id="hdBreadSession">BUỔI 01</span> <span class="sep">/</span> <span
+              class="cyan-text">BẢNG ĐIỂM DANH</span></span>
+          <button type="button" class="btn-secondary hist-refresh-btn" id="btnBackToHistorySessions">← QUAY LẠI DANH
+            SÁCH BUỔI</button>
         </div>
 
         <header class="hs-header">
@@ -411,7 +418,8 @@
             <div class="hist-ring-wrap">
               <svg viewBox="0 0 44 44" class="hist-ring-svg">
                 <circle cx="22" cy="22" r="18" class="hist-ring-bg" />
-                <circle cx="22" cy="22" r="18" class="hist-ring-fg" id="hdRateRing" stroke-dasharray="113.1" stroke-dashoffset="113.1" />
+                <circle cx="22" cy="22" r="18" class="hist-ring-fg" id="hdRateRing" stroke-dasharray="113.1"
+                  stroke-dashoffset="113.1" />
               </svg>
               <div class="hist-ring-text">✓</div>
             </div>
@@ -492,7 +500,8 @@
       <!-- VIEW: EXPORT REPORT (FIGMA 1:1) -->
       <section class="view-section" id="view-export">
         <div class="hist-breadcrumb-bar">
-          <span class="cc-breadcrumb">TRANG CHỦ <span class="sep">/</span> BÁO CÁO <span class="sep">/</span> <span class="cyan-text">XUẤT BÁO CÁO</span></span>
+          <span class="cc-breadcrumb">TRANG CHỦ <span class="sep">/</span> BÁO CÁO <span class="sep">/</span> <span
+              class="cyan-text">XUẤT BÁO CÁO</span></span>
           <span class="exp-live-badge"><span class="exp-live-dot"></span> ĐỒNG BỘ POSTGRESQL</span>
         </div>
 
@@ -503,7 +512,8 @@
               <span>XUẤT BÁO CÁO</span>
             </div>
             <h1 class="hist-title">Xuất báo cáo <span class="cyan-text">điểm danh</span></h1>
-            <p class="hist-subtitle">Tổng hợp dữ liệu điểm danh của các lớp học phần theo thời gian thực. Tùy chỉnh bộ lọc và định dạng báo cáo bên dưới trước khi xuất hoặc in.</p>
+            <p class="hist-subtitle">Tổng hợp dữ liệu điểm danh của các lớp học phần theo thời gian thực. Tùy chỉnh bộ
+              lọc và định dạng báo cáo bên dưới trước khi xuất hoặc in.</p>
           </div>
 
           <div class="exp-hero-kpis">
@@ -731,7 +741,8 @@
                   </div>
 
                   <div class="exp-doc-note" id="expDocNoteWrap" style="display:none">
-                    <strong>Ghi chú:</strong> Dữ liệu được trích xuất trực tiếp từ hệ thống điểm danh sinh trắc học AI PostgreSQL.
+                    <strong>Ghi chú:</strong> Dữ liệu được trích xuất trực tiếp từ hệ thống điểm danh sinh trắc học AI
+                    PostgreSQL.
                   </div>
                 </div>
               </div>
@@ -816,8 +827,10 @@
               <span class="exp-term-title">EXPORT_ENGINE.LOG</span>
             </div>
             <div class="exp-terminal-body" id="expTerminalLog">
-              <div class="exp-log-line"><span class="log-ts">[READY]</span> Hệ thống xuất báo cáo đã kết nối PostgreSQL.</div>
-              <div class="exp-log-line"><span class="log-ts">[INFO]</span> Chọn lớp học, khoảng thời gian và định dạng để bắt đầu.</div>
+              <div class="exp-log-line"><span class="log-ts">[READY]</span> Hệ thống xuất báo cáo đã kết nối PostgreSQL.
+              </div>
+              <div class="exp-log-line"><span class="log-ts">[INFO]</span> Chọn lớp học, khoảng thời gian và định dạng
+                để bắt đầu.</div>
             </div>
           </div>
         </div>
@@ -880,7 +893,7 @@
           </div>
         </header>
 
-        <form id="createClassForm" class="cc-stack">
+        <form id="createClassForm" class="cc-stack" novalidate>
           <!-- CARD 01: CLASS INFO -->
           <div class="cc-card">
             <div class="cc-card-head">
@@ -890,18 +903,20 @@
               </div>
             </div>
 
-            <div class="field">
+            <div class="field" id="fieldClassName">
               <label>TÊN LỚP / MÔN HỌC *</label>
-              <input type="text" id="inputClassName" required placeholder="VD: CMU - CS 453 AGIS" />
+              <input type="text" id="inputClassName" maxlength="80" placeholder="VD: CMU - CS 453 AGIS" />
+              <div class="field-error-msg" id="errClassName"></div>
             </div>
 
-            <div class="field">
+            <div class="field" id="fieldJoinCode">
               <label>MÃ LỚP / JOIN CODE (TỰ ĐỘNG SINH)</label>
               <div class="code-gen-row">
                 <input type="text" id="inputJoinCode" readonly style="text-transform: uppercase" />
                 <button type="button" class="btn-gen-code" id="btnGenJoinCode">↻ Đổi mã khác</button>
               </div>
               <div class="code-hint">● Mã khả dụng ✓ · Tự động sinh cho lớp học</div>
+              <div class="field-error-msg" id="errJoinCode"></div>
             </div>
 
             <div class="field-row">
@@ -985,6 +1000,7 @@
                 <div class="fp-fill" id="fpFill"></div>
               </div>
             </div>
+            <div class="field-error-msg" id="csvUploadError"></div>
           </div>
 
           <div class="modal-error" id="createClassError"></div>

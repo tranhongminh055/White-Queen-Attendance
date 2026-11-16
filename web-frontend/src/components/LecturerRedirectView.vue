@@ -149,9 +149,9 @@ function handleLogout() {
         </p>
 
         <div class="sx-logout-wrap">
-          <button type="button" class="sx-enroll-btn" @click="handleGoEnroll">
+          <button v-if="!profile.embeddingCreated" type="button" class="sx-enroll-btn" @click="handleGoEnroll">
             <span class="sx-enroll-icon">◎</span>
-            <span>{{ profile.embeddingCreated ? 'CẬP NHẬT KHUÔN MẶT' : 'ĐĂNG KÝ KHUÔN MẶT' }}</span>
+            <span>ĐĂNG KÝ KHUÔN MẶT</span>
           </button>
           <button type="button" class="sx-logout-btn" @click="handleLogout">
             ĐĂNG XUẤT

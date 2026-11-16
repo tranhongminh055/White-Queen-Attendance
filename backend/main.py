@@ -1356,7 +1356,7 @@ def enroll_student_face(payload: EnrollFaceRequest):
     try:
         cur = conn.cursor()
         cur.execute(
-            "SELECT StudentId, FullName, ClassId, Email FROM StudentProfiles WHERE UPPER(StudentId) = ?",
+            "SELECT StudentId, FullName, ClassId, Email, EmbeddingCreated FROM StudentProfiles WHERE UPPER(StudentId) = ?",
             (student_id,),
         )
         existing = cur.fetchone()
@@ -1375,7 +1375,53 @@ def enroll_student_face(payload: EnrollFaceRequest):
                 "INSERT INTO StudentProfiles (StudentId, FullName, ClassId, Email, EmbeddingCreated) VALUES (?, ?, ?, ?, 0)",
                 (acc[0], acc[1], acc[2] or "LECTURER", acc[3] or ""),
             )
-            existing = (acc[0], acc[1], acc[2] or "LECTURER", acc[3] or "")
+            existing = (acc[0], acc[1], acc[2] or "LECTURER", acc[3] or "", 0)
+
+        # 1) Khóa chống fake: đã đăng ký khuôn mặt rồi thì không cho cập nhật/ghi đè lại
+        cur.execute("SELECT COUNT(*) FROM FaceEmbeddings WHERE UPPER(StudentId) = ?", (student_id,))
+        face_count = int((cur.fetchone() or [0])[0] or 0)
+        if bool(existing[4]) or face_count > 0:
+            raise HTTPException(
+                status_code=409,
+                detail="Tài khoản này đã đăng ký khuôn mặt và được khóa chống giả mạo, không thể cập nhật lại gương mặt.",
+            )
+
+        # 2) Kiểm tra 5 góc phải thuộc cùng 1 người (tránh tráo mặt giữa các góc)
+        primary_vec = desc_map.get("straight") or next(iter(desc_map.values()), None)
+        if primary_vec:
+            for angle_key, vec in desc_map.items():
+                if len(vec) == len(primary_vec):
+                    angle_dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(primary_vec, vec)))
+                    if angle_dist > 0.62:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Dữ liệu khuôn mặt ở góc '{angle_key}' không khớp với khuôn mặt chính. Vui lòng quét lại bằng cùng một người.",
+                        )
+
+        # 3) Chống dùng 1 gương mặt đăng ký cho nhiều sinh viên / nhiều tài khoản
+        if primary_vec:
+            cur.execute(
+                """
+                SELECT f.StudentId, COALESCE(s.FullName, f.StudentId), f.DescriptorJson
+                FROM FaceEmbeddings f
+                LEFT JOIN StudentProfiles s ON UPPER(s.StudentId) = UPPER(f.StudentId)
+                WHERE UPPER(f.StudentId) <> ?
+                """,
+                (student_id,),
+            )
+            for other_id, other_name, other_json in cur.fetchall():
+                try:
+                    other_vec = json.loads(other_json or "[]")
+                except Exception:
+                    continue
+                if not isinstance(other_vec, list) or len(other_vec) != len(primary_vec):
+                    continue
+                dist = math.sqrt(sum((a - float(b)) ** 2 for a, b in zip(primary_vec, other_vec)))
+                if dist < 0.50:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Khuôn mặt này đã được đăng ký cho sinh viên/tài khoản khác ({other_name} - {other_id}). Mỗi gương mặt chỉ được đăng ký cho 1 sinh viên duy nhất!",
+                    )
 
         full_name = (payload.name or existing[1]).strip()
         class_id = (payload.classId or existing[2] or "CNTT-K21A").strip()
@@ -1414,6 +1460,9 @@ def enroll_student_face(payload: EnrollFaceRequest):
         conn.commit()
         rows = build_student_payloads(cur, existing[0])
         return {"success": True, "student": rows[0]}
+    except HTTPException:
+        conn.rollback()
+        raise
     except Exception as exc:
         conn.rollback()
         raise HTTPException(

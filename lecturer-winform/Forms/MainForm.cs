@@ -169,156 +169,156 @@ public sealed class MainForm : Form
                     break;
 
                 case "dashboard_load_data":
-                {
-                    var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
-                    if (string.IsNullOrWhiteSpace(lecturerId))
                     {
-                        await _webView.CoreWebView2.ExecuteScriptAsync("window.onDashboardData && window.onDashboardData({ok:false,classes:[],todaySessions:0,logs:[]})");
+                        var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
+                        if (string.IsNullOrWhiteSpace(lecturerId))
+                        {
+                            await _webView.CoreWebView2.ExecuteScriptAsync("window.onDashboardData && window.onDashboardData({ok:false,classes:[],todaySessions:0,logs:[]})");
+                            break;
+                        }
+
+                        var classesTask = _apiClient.GetLecturerClassesRawAsync(lecturerId);
+                        var attTask = _apiClient.GetLecturerAttendanceRawAsync(lecturerId);
+                        var sessionsTask = _apiClient.GetLecturerAttendanceSessionsRawAsync(lecturerId);
+                        await Task.WhenAll(classesTask, attTask, sessionsTask);
+
+                        var (clsOk, clsJson) = classesTask.Result;
+                        var (_, attJson) = attTask.Result;
+                        var (_, sesJson) = sessionsTask.Result;
+                        var payload = $"{{\"ok\":{(clsOk ? "true" : "false")},\"classes\":{(clsOk ? clsJson : "[]")},\"attendance\":{attJson},\"sessions\":{sesJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onDashboardData && window.onDashboardData({payload})");
                         break;
                     }
 
-                    var classesTask = _apiClient.GetLecturerClassesRawAsync(lecturerId);
-                    var attTask = _apiClient.GetLecturerAttendanceRawAsync(lecturerId);
-                    var sessionsTask = _apiClient.GetLecturerAttendanceSessionsRawAsync(lecturerId);
-                    await Task.WhenAll(classesTask, attTask, sessionsTask);
-
-                    var (clsOk, clsJson) = classesTask.Result;
-                    var (_, attJson) = attTask.Result;
-                    var (_, sesJson) = sessionsTask.Result;
-                    var payload = $"{{\"ok\":{(clsOk ? "true" : "false")},\"classes\":{(clsOk ? clsJson : "[]")},\"attendance\":{attJson},\"sessions\":{sesJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onDashboardData && window.onDashboardData({payload})");
-                    break;
-                }
-
                 case "class_create":
-                {
-                    var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
-                    string Str(string key) => doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? string.Empty : string.Empty;
-                    var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
-                        ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
-                        : Array.Empty<string>();
-                    var (ok, respJson) = await _apiClient.CreateClassRawAsync(
-                        lecturerId,
-                        Str("className"),
-                        Str("joinCode"),
-                        Str("semester"),
-                        Str("scheduleText"),
-                        Str("roomText"),
-                        studentIds
-                    );
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassCreated && window.onClassCreated({payload})");
-                    break;
-                }
+                    {
+                        var lecturerId = _currentLecturer?.EmployeeId ?? string.Empty;
+                        string Str(string key) => doc.RootElement.TryGetProperty(key, out var p) ? p.GetString() ?? string.Empty : string.Empty;
+                        var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
+                            ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
+                            : Array.Empty<string>();
+                        var (ok, respJson) = await _apiClient.CreateClassRawAsync(
+                            lecturerId,
+                            Str("className"),
+                            Str("joinCode"),
+                            Str("semester"),
+                            Str("scheduleText"),
+                            Str("roomText"),
+                            studentIds
+                        );
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassCreated && window.onClassCreated({payload})");
+                        break;
+                    }
 
                 case "students_lookup":
-                {
-                    var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
-                        ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
-                        : Array.Empty<string>();
-                    var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(studentIds);
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({payload})");
-                    break;
-                }
-
-                case "parse_xlsx_students":
-                {
-                    try
                     {
-                        var b64 = doc.RootElement.TryGetProperty("base64", out var bEl) ? bEl.GetString() ?? string.Empty : string.Empty;
-                        var ids = ExtractStudentIdsFromXlsx(Convert.FromBase64String(b64));
-                        var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(ids);
+                        var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
+                            ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
+                            : Array.Empty<string>();
+                        var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(studentIds);
                         var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
                         await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({payload})");
+                        break;
                     }
-                    catch (Exception ex)
+
+                case "parse_xlsx_students":
                     {
-                        var errJson = JsonSerializer.Serialize(new { detail = $"Lỗi đọc file Excel: {ex.Message}" });
-                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({{\"ok\":false,\"data\":{errJson}}})");
+                        try
+                        {
+                            var b64 = doc.RootElement.TryGetProperty("base64", out var bEl) ? bEl.GetString() ?? string.Empty : string.Empty;
+                            var ids = ExtractStudentIdsFromXlsx(Convert.FromBase64String(b64));
+                            var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(ids);
+                            var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                            await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({payload})");
+                        }
+                        catch (Exception ex)
+                        {
+                            var errJson = JsonSerializer.Serialize(new { detail = $"Lỗi đọc file Excel: {ex.Message}" });
+                            await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({{\"ok\":false,\"data\":{errJson}}})");
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case "class_delete":
-                {
-                    var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
-                    var (ok, respJson) = await _apiClient.DeleteClassAsync(classId);
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassDeleted && window.onClassDeleted({payload})");
-                    break;
-                }
+                    {
+                        var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                        var (ok, respJson) = await _apiClient.DeleteClassAsync(classId);
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassDeleted && window.onClassDeleted({payload})");
+                        break;
+                    }
 
                 case "class_students":
-                {
-                    var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
-                    var (ok, respJson) = await _apiClient.GetClassStudentsRawAsync(classId);
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassStudents && window.onClassStudents({payload})");
-                    break;
-                }
+                    {
+                        var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                        var (ok, respJson) = await _apiClient.GetClassStudentsRawAsync(classId);
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassStudents && window.onClassStudents({payload})");
+                        break;
+                    }
 
                 case "attendance_init":
-                {
-                    var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
-                    var studentsTask = _apiClient.GetClassStudentsRawAsync(classId);
-                    var logsTask = _apiClient.GetClassAttendanceLogsRawAsync(classId);
-                    var descTask = _apiClient.GetClassFaceDescriptorsRawAsync(classId);
-                    await Task.WhenAll(studentsTask, logsTask, descTask);
-                    var (sOk, sJson) = await studentsTask;
-                    var (_, lJson) = await logsTask;
-                    var (_, dJson) = await descTask;
-                    var payload = $"{{\"ok\":{(sOk ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"students\":{sJson},\"logs\":{lJson},\"descriptors\":{dJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceInit && window.onAttendanceInit({payload})");
-                    break;
-                }
+                    {
+                        var classId = doc.RootElement.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                        var studentsTask = _apiClient.GetClassStudentsRawAsync(classId);
+                        var logsTask = _apiClient.GetClassAttendanceLogsRawAsync(classId);
+                        var descTask = _apiClient.GetClassFaceDescriptorsRawAsync(classId);
+                        await Task.WhenAll(studentsTask, logsTask, descTask);
+                        var (sOk, sJson) = await studentsTask;
+                        var (_, lJson) = await logsTask;
+                        var (_, dJson) = await descTask;
+                        var payload = $"{{\"ok\":{(sOk ? "true" : "false")},\"classId\":{JsonSerializer.Serialize(classId)},\"students\":{sJson},\"logs\":{lJson},\"descriptors\":{dJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceInit && window.onAttendanceInit({payload})");
+                        break;
+                    }
 
                 case "attendance_record":
-                {
-                    var el = doc.RootElement;
-                    var studentId = el.TryGetProperty("studentId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
-                    var studentName = el.TryGetProperty("studentName", out var nEl) ? nEl.GetString() ?? string.Empty : string.Empty;
-                    var classId = el.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
-                    var confidence = el.TryGetProperty("confidence", out var cfEl)
-                        ? (cfEl.ValueKind == JsonValueKind.String ? cfEl.GetString() ?? "99.0%" : $"{cfEl.GetDouble():0.1}%")
-                        : "99.0%";
-                    var avatar = el.TryGetProperty("avatar", out var aEl) && aEl.ValueKind == JsonValueKind.String ? aEl.GetString() : null;
-                    var device = el.TryGetProperty("device", out var dvEl) ? dvEl.GetString() ?? "Lecturer Desktop AI" : "Lecturer Desktop AI";
-                    var (ok, respJson) = await _apiClient.RecordAttendanceRawAsync(studentId, studentName, classId, confidence, avatar, device);
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"studentId\":{JsonSerializer.Serialize(studentId)},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceRecorded && window.onAttendanceRecorded({payload})");
-                    break;
-                }
+                    {
+                        var el = doc.RootElement;
+                        var studentId = el.TryGetProperty("studentId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
+                        var studentName = el.TryGetProperty("studentName", out var nEl) ? nEl.GetString() ?? string.Empty : string.Empty;
+                        var classId = el.TryGetProperty("classId", out var cEl) ? cEl.GetString() ?? string.Empty : string.Empty;
+                        var confidence = el.TryGetProperty("confidence", out var cfEl)
+                            ? (cfEl.ValueKind == JsonValueKind.String ? cfEl.GetString() ?? "99.0%" : $"{cfEl.GetDouble():0.1}%")
+                            : "99.0%";
+                        var avatar = el.TryGetProperty("avatar", out var aEl) && aEl.ValueKind == JsonValueKind.String ? aEl.GetString() : null;
+                        var device = el.TryGetProperty("device", out var dvEl) ? dvEl.GetString() ?? "Lecturer Desktop AI" : "Lecturer Desktop AI";
+                        var (ok, respJson) = await _apiClient.RecordAttendanceRawAsync(studentId, studentName, classId, confidence, avatar, device);
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"studentId\":{JsonSerializer.Serialize(studentId)},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceRecorded && window.onAttendanceRecorded({payload})");
+                        break;
+                    }
 
                 case "attendance_save_session":
-                {
-                    var el = doc.RootElement;
-                    var (ok, respJson) = await _apiClient.SaveAttendanceSessionRawAsync(el);
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceSessionSaved && window.onAttendanceSessionSaved({payload})");
-                    break;
-                }
+                    {
+                        var el = doc.RootElement;
+                        var (ok, respJson) = await _apiClient.SaveAttendanceSessionRawAsync(el);
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onAttendanceSessionSaved && window.onAttendanceSessionSaved({payload})");
+                        break;
+                    }
 
                 case "history_session_detail":
-                {
-                    var sessionId = doc.RootElement.TryGetProperty("sessionId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
-                    var (ok, respJson) = await _apiClient.GetAttendanceSessionDetailRawAsync(sessionId);
-                    var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"sessionId\":{JsonSerializer.Serialize(sessionId)},\"data\":{respJson}}}";
-                    await _webView.CoreWebView2.ExecuteScriptAsync($"window.onHistorySessionDetail && window.onHistorySessionDetail({payload})");
-                    break;
-                }
+                    {
+                        var sessionId = doc.RootElement.TryGetProperty("sessionId", out var sEl) ? sEl.GetString() ?? string.Empty : string.Empty;
+                        var (ok, respJson) = await _apiClient.GetAttendanceSessionDetailRawAsync(sessionId);
+                        var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"sessionId\":{JsonSerializer.Serialize(sessionId)},\"data\":{respJson}}}";
+                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onHistorySessionDetail && window.onHistorySessionDetail({payload})");
+                        break;
+                    }
 
                 case "speak_vi":
-                {
-                    var text = doc.RootElement.TryGetProperty("text", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
-                    if (!string.IsNullOrWhiteSpace(text))
                     {
-                        var b64 = await _apiClient.FetchVietnameseTtsBase64Async(text);
-                        var payload = $"{{\"base64\":{JsonSerializer.Serialize(b64)},\"text\":{JsonSerializer.Serialize(text)}}}";
-                        await _webView.CoreWebView2.ExecuteScriptAsync($"window.onSpeakVi && window.onSpeakVi({payload})");
+                        var text = doc.RootElement.TryGetProperty("text", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            var b64 = await _apiClient.FetchVietnameseTtsBase64Async(text);
+                            var payload = $"{{\"base64\":{JsonSerializer.Serialize(b64)},\"text\":{JsonSerializer.Serialize(text)}}}";
+                            await _webView.CoreWebView2.ExecuteScriptAsync($"window.onSpeakVi && window.onSpeakVi({payload})");
+                        }
+                        break;
                     }
-                    break;
-                }
 
                 case "logout":
                     _currentLecturer = null;

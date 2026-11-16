@@ -35,6 +35,14 @@ const initials = computed(() => {
 })
 
 function startFaceEnrollment() {
+  if (profile.value.isEnrolled) {
+    sound.playWarning()
+    emit('notify', {
+      type: 'warning',
+      message: 'Khuôn mặt đã được đăng ký và khóa chống giả mạo, không thể cập nhật lại.'
+    })
+    return
+  }
   sound.playBeep()
   emit('navigate', 'enrollment')
 }
@@ -142,14 +150,18 @@ onMounted(async () => {
           </p>
 
           <div class="sx-hero-actions">
-            <button type="button" class="sx-cta-btn" @click="startFaceEnrollment">
+            <button v-if="!profile.isEnrolled" type="button" class="sx-cta-btn" @click="startFaceEnrollment">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                 <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/>
                 <circle cx="12" cy="12" r="2.5"/>
               </svg>
-              <span>{{ profile.isEnrolled ? 'Cập nhật gương mặt' : 'Đăng ký gương mặt' }}</span>
+              <span>Đăng ký gương mặt</span>
               <span class="cta-arrow">→</span>
             </button>
+
+            <div v-else class="sx-cta-locked-badge" title="Dữ liệu sinh trắc học đã khóa để chống giả mạo">
+              <span>✓ ĐÃ XÁC THỰC &amp; KHÓA SINH TRẮC HỌC</span>
+            </div>
 
             <button type="button" class="sx-cta-secondary-btn" @click="openClassRegistration">
               <span>Đăng ký lớp học</span>
@@ -886,6 +898,22 @@ onMounted(async () => {
   .sx-steps-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.sx-cta-locked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  color: #34d399;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  user-select: none;
 }
 </style>
 

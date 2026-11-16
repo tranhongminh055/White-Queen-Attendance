@@ -880,7 +880,7 @@
           </div>
         </header>
 
-        <form id="createClassForm" class="cc-stack">
+        <form id="createClassForm" class="cc-stack" novalidate>
           <!-- CARD 01: CLASS INFO -->
           <div class="cc-card">
             <div class="cc-card-head">
@@ -890,18 +890,20 @@
               </div>
             </div>
 
-            <div class="field">
+            <div class="field" id="fieldClassName">
               <label>TÊN LỚP / MÔN HỌC *</label>
-              <input type="text" id="inputClassName" required placeholder="VD: CMU - CS 453 AGIS" />
+              <input type="text" id="inputClassName" maxlength="80" placeholder="VD: CMU - CS 453 AGIS" />
+              <div class="field-error-msg" id="errClassName"></div>
             </div>
 
-            <div class="field">
+            <div class="field" id="fieldJoinCode">
               <label>MÃ LỚP / JOIN CODE (TỰ ĐỘNG SINH)</label>
               <div class="code-gen-row">
                 <input type="text" id="inputJoinCode" readonly style="text-transform: uppercase" />
                 <button type="button" class="btn-gen-code" id="btnGenJoinCode">↻ Đổi mã khác</button>
               </div>
               <div class="code-hint">● Mã khả dụng ✓ · Tự động sinh cho lớp học</div>
+              <div class="field-error-msg" id="errJoinCode"></div>
             </div>
 
             <div class="field-row">
@@ -985,6 +987,7 @@
                 <div class="fp-fill" id="fpFill"></div>
               </div>
             </div>
+            <div class="field-error-msg" id="csvUploadError"></div>
           </div>
 
           <div class="modal-error" id="createClassError"></div>

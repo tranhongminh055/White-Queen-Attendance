@@ -4246,3 +4246,49 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* =========================================================
+   CREATE CLASS FORM & FILE UPLOAD VALIDATION
+   ========================================================= */
+
+@keyframes ccShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.field-error-msg {
+  display: none;
+  margin-top: 6px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #fb7185;
+  align-items: center;
+  gap: 6px;
+}
+
+.field-error-msg.show {
+  display: flex;
+}
+
+.field.invalid input,
+.field.invalid select {
+  border-color: #fb7185 !important;
+  box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18) !important;
+  animation: ccShake 0.32s ease;
+}
+
+.field.valid input {
+  border-color: rgba(52, 211, 153, 0.55) !important;
+}
+
+.drop-zone.error {
+  border-color: #fb7185 !important;
+  background: rgba(244, 63, 94, 0.08) !important;
+  animation: ccShake 0.32s ease;
+}
+
+.drop-zone.valid {
+  border-color: rgba(52, 211, 153, 0.55) !important;
+}

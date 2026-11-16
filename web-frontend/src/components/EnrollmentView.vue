@@ -458,6 +458,15 @@ async function completeEnrollment() {
 
 onMounted(async () => {
   const verifiedProfile = await storage.verifySessionFromDb()
+  if (verifiedProfile?.embeddingCreated) {
+    sound.playWarning()
+    emit('notify', {
+      type: 'warning',
+      message: 'Tài khoản này đã đăng ký khuôn mặt và bị khóa chống giả mạo.'
+    })
+    emit('navigate', verifiedProfile.role === 'lecturer' ? 'lecturer-redirect' : 'face-intro')
+    return
+  }
   if (!verifiedProfile) {
     sound.playWarning()
     emit('notify', {

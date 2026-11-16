@@ -839,9 +839,100 @@
   });
 
   // ===== DEDICATED CREATE CLASS PAGE =====
-  function openCreateClassPage() {
+  function setFieldValidation(fieldId, errId, errorMsg) {
+    const field = document.getElementById(fieldId);
+    const errEl = document.getElementById(errId);
+    if (field) {
+      field.classList.remove('invalid', 'valid');
+      if (errorMsg) field.classList.add('invalid');
+      else field.classList.add('valid');
+    }
+    if (errEl) {
+      errEl.textContent = errorMsg ? `⚠ ${errorMsg}` : '';
+      errEl.classList.toggle('show', Boolean(errorMsg));
+    }
+    return !errorMsg;
+  }
+
+  function setCsvUploadError(errorMsg, isSuccess = false) {
+    const zone = document.getElementById('csvDropZone');
+    const errEl = document.getElementById('csvUploadError');
+    if (zone) {
+      zone.classList.remove('error', 'valid');
+      if (errorMsg) zone.classList.add('error');
+      else if (isSuccess) zone.classList.add('valid');
+    }
+    if (errEl) {
+      errEl.textContent = errorMsg ? `⚠ ${errorMsg}` : '';
+      errEl.classList.toggle('show', Boolean(errorMsg));
+    }
+  }
+
+  function validateClassName(showValidState = true) {
+    const raw = document.getElementById('inputClassName')?.value || '';
+    const val = raw.trim();
+    const sem = (document.getElementById('inputSemester')?.value || '').trim();
+    let msg = '';
+
+    if (!val) {
+      msg = 'Vui lòng nhập tên lớp / môn học.';
+    } else if (val.length < 4 || val.length > 80) {
+      msg = 'Tên lớp phải từ 4 đến 80 ký tự.';
+    } else if (!/^[\p{L}\p{N}\s\-_.()/+,:]+$/u.test(val)) {
+      msg = 'Tên lớp chứa ký tự không hợp lệ (chỉ cho phép chữ, số, khoảng trắng và - _ . / ( ) + , :).';
+    } else if (!/\p{L}.*\p{L}/u.test(val)) {
+      msg = 'Tên lớp phải chứa ít nhất 2 chữ cái hợp lệ.';
+    } else if (
+      (allClasses || []).some(
+        (c) =>
+          String(c.className || '').trim().toLowerCase() === val.toLowerCase() &&
+          String(c.semester || '').trim().toLowerCase() === sem.toLowerCase()
+      )
+    ) {
+      msg = `Lớp "${val}" đã tồn tại trong học kỳ ${sem}.`;
+    }
+
+    if (!msg && !showValidState) {
+      document.getElementById('fieldClassName')?.classList.remove('invalid', 'valid');
+      const errEl = document.getElementById('errClassName');
+      if (errEl) {
+        errEl.textContent = '';
+        errEl.classList.remove('show');
+      }
+      return true;
+    }
+    return setFieldValidation('fieldClassName', 'errClassName', msg);
+  }
+
+  function validateJoinCode() {
+    const val = (document.getElementById('inputJoinCode')?.value || '').trim().toUpperCase();
+    let msg = '';
+    if (!/^[A-Z0-9]{2,6}-[A-Z0-9]{3,6}$/.test(val)) {
+      msg = 'Mã lớp không đúng định dạng (VD: WQ-A1B2).';
+    } else if ((allClasses || []).some((c) => String(c.joinCode || '').toUpperCase() === val)) {
+      msg = 'Mã lớp đã tồn tại, vui lòng bấm "Đổi mã khác".';
+    }
+    return setFieldValidation('fieldJoinCode', 'errJoinCode', msg);
+  }
+
+  function resetCreateClassValidation() {
+    ['fieldClassName', 'fieldJoinCode'].forEach((id) => {
+      document.getElementById(id)?.classList.remove('invalid', 'valid');
+    });
+    ['errClassName', 'errJoinCode'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.textContent = '';
+        el.classList.remove('show');
+      }
+    });
+    setCsvUploadError('');
     document.getElementById('createClassError').textContent = '';
+  }
+
+  function openCreateClassPage() {
     document.getElementById('createClassForm').reset();
+    resetCreateClassValidation();
     document.getElementById('inputSemester').value = 'HK1 2025-2026';
     document.getElementById('fileProgressBox').style.display = 'none';
     generateJoinCode();
@@ -910,33 +1001,89 @@
   function handleCsvFile(file) {
     if (!file) return;
     const box = document.getElementById('fileProgressBox');
-    box.style.display = 'block';
-    document.getElementById('fpFileName').textContent = `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`;
+    const fileInput = document.getElementById('csvFileInput');
+    const lowerName = String(file.name || '').toLowerCase();
+    const ext = lowerName.includes('.') ? lowerName.slice(lowerName.lastIndexOf('.')) : '';
 
-    if (file.name.toLowerCase().endsWith('.xls')) {
+    setCsvUploadError('');
+    const failUpload = (msg) => {
       box.style.display = 'none';
-      showToast('Định dạng .xls cũ chưa được hỗ trợ, vui lòng lưu file dưới dạng .xlsx hoặc .csv.', 'error');
+      setCsvUploadError(msg);
+      showToast(msg, 'error');
+      if (fileInput) fileInput.value = '';
+    };
+
+    if (ext === '.xls') {
+      failUpload('Định dạng .xls cũ không được hỗ trợ. Vui lòng dùng file .xlsx, .csv hoặc .txt.');
       return;
     }
 
-    if (file.name.toLowerCase().endsWith('.xlsx')) {
-      document.getElementById('fpStatus').textContent = 'ĐANG ĐỌC FILE EXCEL...';
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = String(ev.target?.result || '');
-        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-        postMsg({ action: 'parse_xlsx_students', base64 });
+    if (!['.xlsx', '.csv', '.txt'].includes(ext)) {
+      failUpload(`Định dạng "${ext || 'không xác định'}" không hợp lệ! Chỉ chấp nhận file .xlsx, .csv hoặc .txt.`);
+      return;
+    }
+
+    if (file.size === 0) {
+      failUpload('File tải lên đang rỗng (0 KB). Vui lòng kiểm tra lại file danh sách.');
+      return;
+    }
+
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      failUpload('Dung lượng file vượt quá giới hạn 5 MB.');
+      return;
+    }
+
+    box.style.display = 'block';
+    document.getElementById('fpFileName').textContent = `${file.name} (${Math.max(1, Math.round(file.size / 1024))} KB)`;
+
+    if (ext === '.xlsx') {
+      document.getElementById('fpStatus').textContent = 'ĐANG KIỂM TRA ĐỊNH DẠNG EXCEL...';
+      const sigReader = new FileReader();
+      sigReader.onload = (sigEv) => {
+        const bytes = new Uint8Array(sigEv.target?.result || []);
+        const isZipSignature =
+          bytes.length >= 4 &&
+          bytes[0] === 0x50 &&
+          bytes[1] === 0x4b &&
+          (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07);
+
+        if (!isZipSignature) {
+          failUpload('File .xlsx không đúng cấu trúc Excel OpenXML (có thể bị hỏng hoặc bị đổi đuôi file).');
+          return;
+        }
+
+        document.getElementById('fpStatus').textContent = 'ĐANG ĐỌC FILE EXCEL...';
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const dataUrl = String(ev.target?.result || '');
+          const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          setCsvUploadError('', true);
+          postMsg({ action: 'parse_xlsx_students', base64 });
+          if (fileInput) fileInput.value = '';
+        };
+        reader.readAsDataURL(file);
       };
-      reader.readAsDataURL(file);
+      sigReader.readAsArrayBuffer(file.slice(0, 4));
       return;
     }
 
     const reader = new FileReader();
     reader.onload = (ev) => {
-      const content = ev.target?.result || '';
+      const content = String(ev.target?.result || '');
+      if (content.includes('\u0000')) {
+        failUpload('File chứa dữ liệu nhị phân không hợp lệ. Vui lòng tải file văn bản .csv hoặc .txt.');
+        return;
+      }
       const ids = extractStudentIdsFromText(content);
+      if (!ids.length) {
+        failUpload('Không tìm thấy MSSV hợp lệ trong file (VD: SV-7142, 20210001).');
+        return;
+      }
+      setCsvUploadError('', true);
       document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${ids.length} MSSV`;
       addIdsAndLookup(ids);
+      if (fileInput) fileInput.value = '';
     };
     reader.readAsText(file, 'utf-8');
   }
@@ -983,19 +1130,41 @@
   document.getElementById('btnLogout').addEventListener('click', () => postMsg({ action: 'logout' }));
   document.getElementById('btnExit').addEventListener('click', () => postMsg({ action: 'exit_app' }));
 
+  document.getElementById('inputClassName')?.addEventListener('input', () => validateClassName(true));
+  document.getElementById('inputClassName')?.addEventListener('blur', () => validateClassName(true));
+  document.getElementById('inputSemester')?.addEventListener('change', () => {
+    if ((document.getElementById('inputClassName')?.value || '').trim()) validateClassName(true);
+  });
+
   document.getElementById('createClassForm').addEventListener('submit', (e) => {
     e.preventDefault();
+    const okName = validateClassName(true);
+    const okCode = validateJoinCode();
+    const errBox = document.getElementById('createClassError');
+
+    if (!okName || !okCode) {
+      errBox.textContent = 'Vui lòng kiểm tra và sửa các trường nhập liệu chưa đúng định dạng.';
+      showToast('Thông tin lớp học chưa hợp lệ.', 'error');
+      if (!okName) document.getElementById('inputClassName')?.focus();
+      return;
+    }
+
     const className = document.getElementById('inputClassName').value.trim();
     const joinCode = document.getElementById('inputJoinCode').value.trim().toUpperCase();
     const semester = document.getElementById('inputSemester').value.trim();
     const scheduleText = document.getElementById('inputSchedule').value.trim();
     const roomText = document.getElementById('inputRoom').value.trim();
-    if (!className) return;
+
+    if (!semester || !scheduleText || !roomText) {
+      errBox.textContent = 'Vui lòng chọn đầy đủ Học kỳ, Lịch học và Phòng học.';
+      showToast('Vui lòng chọn đầy đủ thông tin lớp học.', 'error');
+      return;
+    }
 
     const btn = document.getElementById('btnSubmitCreate');
     btn.disabled = true;
     btn.textContent = 'Đang lưu lên PostgreSQL...';
-    document.getElementById('createClassError').textContent = '';
+    errBox.textContent = '';
 
     const validIds = importedStudents.filter((s) => s.exists).map((s) => s.id);
     postMsg({
@@ -1630,10 +1799,22 @@
   window.onStudentsLookup = function (res) {
     if (!res?.ok || !Array.isArray(res?.data)) {
       const detail = res?.data?.detail ? ` (${res.data.detail})` : '';
-      showToast(`Không thể kiểm tra danh sách sinh viên từ máy chủ${detail}.`, 'error');
+      const msg = `Không thể đọc danh sách sinh viên từ file${detail}.`;
+      const box = document.getElementById('fileProgressBox');
+      if (box) box.style.display = 'none';
+      setCsvUploadError(msg);
+      showToast(msg, 'error');
       return;
     }
     importedStudents = res.data;
+    if (!importedStudents.length) {
+      const msg = 'File không chứa MSSV nào hợp lệ.';
+      setCsvUploadError(msg);
+      showToast(msg, 'error');
+      renderPreviewStudents();
+      return;
+    }
+    setCsvUploadError('', true);
     document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${importedStudents.length} MSSV`;
     renderPreviewStudents();
     showToast(`Đã kiểm tra ${importedStudents.length} sinh viên từ PostgreSQL.`);
