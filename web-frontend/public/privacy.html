@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — White Queen Lecturer Attendance</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050910;
+      --card: #0a101a;
+      --border: rgba(34, 211, 238, 0.22);
+      --cyan: #22d3ee;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: radial-gradient(circle at top right, rgba(34, 211, 238, 0.08), transparent 45%), var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      padding: 36px 18px;
+    }
+    .wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 36px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+    }
+    .kicker {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      color: var(--cyan);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.85rem; color: #f8fafc; }
+    h2 { margin-top: 26px; font-size: 1.12rem; color: var(--cyan); border-bottom: 1px solid rgba(148, 163, 184, 0.16); padding-bottom: 6px; }
+    p, li { color: var(--muted); font-size: 0.96rem; }
+    strong { color: #f1f5f9; }
+    .meta { font-size: 0.85rem; color: #64748b; margin-bottom: 22px; }
+    a { color: var(--cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { display: inline-block; margin-top: 24px; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--border); background: rgba(34, 211, 238, 0.1); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="kicker">WHITE QUEEN · SPACEX BIOMETRIC SYSTEM</div>
+    <h1>Chính sách Bảo mật / Privacy Policy</h1>
+    <div class="meta">Cập nhật lần cuối / Last updated: 16/11/2026 · Áp dụng cho phần mềm <strong>White Queen Lecturer Attendance</strong> &amp; Web Portal</div>
+
+    <h2>1. Dữ liệu chúng tôi thu thập / Information We Collect</h2>
+    <ul>
+      <li><strong>Thông tin tài khoản &amp; học vụ:</strong> Mã giảng viên / MSSV, họ tên, email, danh sách lớp học phần và lịch sử điểm danh do giảng viên hoặc sinh viên cung cấp.</li>
+      <li><strong>Quyền Camera &amp; dữ liệu sinh trắc học khuôn mặt:</strong> Ứng dụng sử dụng webcam để nhận diện khuôn mặt phục vụ duy nhất mục đích đăng nhập giảng viên và điểm danh tự động trong lớp học. Vector đặc trưng khuôn mặt (128-D / 512-D) được lưu trữ an toàn trên máy chủ PostgreSQL.</li>
+    </ul>
+
+    <h2>2. Mục đích sử dụng dữ liệu / How We Use Data</h2>
+    <ul>
+      <li>Xác thực danh tính giảng viên và ghi nhận chuyên cần sinh viên theo thời gian thực.</li>
+      <li>Hiển thị lịch sử điểm danh và xuất báo cáo học vụ (CSV, Excel, JSON, PDF) cho giảng viên phụ trách lớp.</li>
+      <li><strong>Cam kết không thương mại hóa:</strong> Chúng tôi tuyệt đối không bán, cho thuê hoặc chia sẻ dữ liệu khuôn mặt và thông tin cá nhân cho bên thứ ba hay mạng quảng cáo.</li>
+    </ul>
+
+    <h2>3. Bảo mật &amp; Lưu trữ / Security &amp; Storage</h2>
+    <p>
+      Toàn bộ giao tiếp giữa ứng dụng Desktop, Web Portal và Backend API đều được mã hóa qua giao thức <strong>HTTPS / TLS</strong>. Mật khẩu tài khoản được băm bằng thuật toán <strong>PBKDF2-HMAC-SHA256</strong>. Dữ liệu cục bộ của WebView2 chỉ lưu trong thư mục riêng tư của người dùng (<code>%LocalAppData%\WhiteQueenLecturer</code>).
+    </p>
+
+    <h2>4. Quyền xóa dữ liệu &amp; Liên hệ / Data Deletion &amp; Contact</h2>
+    <p>
+      Giảng viên và sinh viên có thể yêu cầu xóa lớp học, lịch sử điểm danh hoặc hồ sơ tài khoản bất kỳ lúc nào qua quản trị viên hệ thống hoặc thông qua repository chính thức:
+      <a href="https://github.com/tranhongminh055/White-Queen-Attendance" target="_blank" rel="noopener">github.com/tranhongminh055/White-Queen-Attendance</a>.
+    </p>
+
+    <a class="back" href="/">← Quay lại trang chủ White Queen Attendance</a>
+  </main>
+</body>
+</html>
+

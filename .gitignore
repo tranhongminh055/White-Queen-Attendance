@@ -20,3 +20,8 @@ __pycache__/
 backend/.env
 backups/
 *.bak
+
+# .NET build & MSIX publish artifacts
+lecturer-winform/bin/
+lecturer-winform/obj/
+lecturer-winform/publish/

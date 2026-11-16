@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {}
+    "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {}
   },
   "projects": {
-    "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {
+    "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
+        "projectUniqueName": "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
         "projectName": "WhiteQueenLecturer",
-        "projectPath": "G:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
+        "projectPath": "g:\\White Queen\\lecturer-winform\\LecturerAttendance.csproj",
         "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
-        "outputPath": "G:\\White Queen\\lecturer-winform\\obj\\",
+        "outputPath": "g:\\White Queen\\lecturer-winform\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "D:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -66,6 +66,20 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
+              "version": "[10.0.8, 10.0.8]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Runtime.win-x64",
+              "version": "[10.0.8, 10.0.8]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
+              "version": "[10.0.8, 10.0.8]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
@@ -365,6 +379,11 @@
             "System.Xml.XPath": "(,4.3.32767]",
             "System.Xml.XPath.XDocument": "(,5.0.32767]"
           }
+        }
+      },
+      "runtimes": {
+        "win-x64": {
+          "#import": []
         }
       }
     }
