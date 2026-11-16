@@ -874,6 +874,12 @@
     const sem = (document.getElementById('inputSemester')?.value || '').trim();
     let msg = '';
 
+    const words = val.split(/\s+/).filter(Boolean);
+    const vowelRegex = /[aeiouyàáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]/iu;
+    const hasLongConsonantRun = /[bcdfghjklmnpqrstvwxz]{5,}/i.test(val);
+    const hasRepeatedChar = /(.)\1{3,}/u.test(val);
+    const hasGibberishWord = words.some((w) => w.replace(/[^a-zA-Z\p{L}]/gu, '').length >= 5 && !vowelRegex.test(w));
+
     if (!val) {
       msg = 'Vui lòng nhập tên lớp / môn học.';
     } else if (val.length < 4 || val.length > 80) {
@@ -882,6 +888,8 @@
       msg = 'Tên lớp chứa ký tự không hợp lệ (chỉ cho phép chữ, số, khoảng trắng và - _ . / ( ) + , :).';
     } else if (!/\p{L}.*\p{L}/u.test(val)) {
       msg = 'Tên lớp phải chứa ít nhất 2 chữ cái hợp lệ.';
+    } else if (hasRepeatedChar || hasLongConsonantRun || hasGibberishWord || (words.length === 1 && val.length >= 16)) {
+      msg = 'Tên lớp không hợp lệ hoặc có chuỗi ký tự vô nghĩa (VD đúng: CMU - CS 453 AGIS).';
     } else if (
       (allClasses || []).some(
         (c) =>
@@ -949,17 +957,41 @@
     document.getElementById('inputJoinCode').value = `WQ-${suffix}`;
   }
 
+  function classifyRosterTextWithAI(lines) {
+    const sample = lines.slice(0, 20).join(' ').toLowerCase();
+    const headerText = lines.slice(0, 5).join(' ').toLowerCase();
+    const studentSignals = ['mssv', 'mã sv', 'ma sv', 'ma_sv', 'masv', 'studentid', 'student_id', 'mã sinh viên', 'họ tên', 'ho ten', 'sinh viên', 'student'];
+    const sprintSignals = ['sprint', 'backlog', 'story point', 'assignee', 'jira', 'epic', 'scrum', 'user story', 'task'];
+    const financeSignals = ['hóa đơn', 'doanh thu', 'chi phí', 'đơn giá', 'thành tiền', 'invoice', 'vat', 'thuế', 'lương'];
+    const scheduleSignals = ['thời khóa biểu', 'lịch thi', 'phòng thi', 'ca thi', 'giám thị'];
+
+    const sScore = studentSignals.filter((k) => headerText.includes(k)).length;
+    if (sprintSignals.filter((k) => sample.includes(k)).length >= 2 && sScore === 0) {
+      return 'AI nhận diện đây là file Quản lý Sprint / Công việc dự án, KHÔNG phải dữ liệu thông tin sinh viên!';
+    }
+    if (financeSignals.filter((k) => sample.includes(k)).length >= 2 && sScore === 0) {
+      return 'AI nhận diện đây là file Tài chính / Hóa đơn, KHÔNG phải dữ liệu thông tin sinh viên!';
+    }
+    if (scheduleSignals.filter((k) => sample.includes(k)).length >= 2 && sScore === 0) {
+      return 'AI nhận diện đây là file Thời khóa biểu / Lịch thi, KHÔNG phải danh sách sinh viên!';
+    }
+    return '';
+  }
+
   function extractStudentIdsFromText(text) {
     const lines = String(text || '')
       .replace(/^\uFEFF/, '')
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
-    if (!lines.length) return [];
+    if (!lines.length) return { ids: [], aiError: 'AI phát hiện file trống, không có dữ liệu.' };
+
+    const aiClassifyErr = classifyRosterTextWithAI(lines);
+    if (aiClassifyErr) return { ids: [], aiError: aiClassifyErr };
 
     const splitCols = (line) => line.split(/[,;\t]/).map((c) => c.trim().replace(/^"|"$/g, ''));
     const firstCols = splitCols(lines[0]).map((c) => c.toUpperCase());
-    let mssvCol = firstCols.findIndex((c) => ['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(c));
+    let mssvCol = firstCols.findIndex((c) => ['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'MÃ SV', 'MA SV'].includes(c));
     const hasHeader = mssvCol !== -1 || firstCols.includes('STT');
     if (mssvCol === -1) {
       mssvCol = firstCols[0] === 'STT' && firstCols.length > 1 ? 1 : 0;
@@ -970,11 +1002,23 @@
     for (let i = startRow; i < lines.length; i++) {
       const cols = splitCols(lines[i]);
       const val = (cols[mssvCol] || '').replace(/[\x00-\x1f\x7f]+/g, '').trim().toUpperCase();
-      if (val && !['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(val)) {
+      if (
+        val &&
+        !['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(val) &&
+        /^[A-Z0-9-]{4,16}$/.test(val) &&
+        (val.match(/\d/g) || []).length >= 3
+      ) {
         ids.push(val);
       }
     }
-    return Array.from(new Set(ids));
+    const unique = Array.from(new Set(ids));
+    if (!unique.length) {
+      return {
+        ids: [],
+        aiError: 'AI phân tích dữ liệu cho thấy đây KHÔNG phải danh sách thông tin sinh viên (không tìm thấy cột MSSV hợp lệ).'
+      };
+    }
+    return { ids: unique, aiError: '' };
   }
 
   function addIdsAndLookup(newIds) {
@@ -1053,12 +1097,11 @@
           return;
         }
 
-        document.getElementById('fpStatus').textContent = 'ĐANG ĐỌC FILE EXCEL...';
+        document.getElementById('fpStatus').textContent = 'AI ĐANG PHÂN TÍCH DỮ LIỆU EXCEL...';
         const reader = new FileReader();
         reader.onload = (ev) => {
           const dataUrl = String(ev.target?.result || '');
           const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-          setCsvUploadError('', true);
           postMsg({ action: 'parse_xlsx_students', base64 });
           if (fileInput) fileInput.value = '';
         };
@@ -1068,6 +1111,7 @@
       return;
     }
 
+    document.getElementById('fpStatus').textContent = 'AI ĐANG PHÂN TÍCH DỮ LIỆU...';
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = String(ev.target?.result || '');
@@ -1075,13 +1119,13 @@
         failUpload('File chứa dữ liệu nhị phân không hợp lệ. Vui lòng tải file văn bản .csv hoặc .txt.');
         return;
       }
-      const ids = extractStudentIdsFromText(content);
-      if (!ids.length) {
-        failUpload('Không tìm thấy MSSV hợp lệ trong file (VD: SV-7142, 20210001).');
+      const { ids, aiError } = extractStudentIdsFromText(content);
+      if (aiError || !ids.length) {
+        failUpload(aiError || 'AI không tìm thấy dữ liệu thông tin sinh viên hợp lệ trong file.');
         return;
       }
       setCsvUploadError('', true);
-      document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${ids.length} MSSV`;
+      document.getElementById('fpStatus').textContent = `✓ AI XÁC NHẬN DỮ LIỆU SINH VIÊN · ${ids.length} MSSV`;
       addIdsAndLookup(ids);
       if (fileInput) fileInput.value = '';
     };
@@ -1807,17 +1851,21 @@
       return;
     }
     importedStudents = res.data;
-    if (!importedStudents.length) {
-      const msg = 'File không chứa MSSV nào hợp lệ.';
+    const validDbCount = importedStudents.filter((s) => s.exists).length;
+    if (!importedStudents.length || validDbCount === 0) {
+      const msg = `File không khớp sinh viên nào trong PostgreSQL (0/${importedStudents.length} MSSV hợp lệ). Vui lòng chọn đúng file danh sách sinh viên!`;
+      const box = document.getElementById('fileProgressBox');
+      if (box) box.style.display = 'none';
+      importedStudents = [];
       setCsvUploadError(msg);
       showToast(msg, 'error');
       renderPreviewStudents();
       return;
     }
     setCsvUploadError('', true);
-    document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${importedStudents.length} MSSV`;
+    document.getElementById('fpStatus').textContent = `100% · ĐÃ ĐỌC ${validDbCount}/${importedStudents.length} MSSV HỢP LỆ`;
     renderPreviewStudents();
-    showToast(`Đã kiểm tra ${importedStudents.length} sinh viên từ PostgreSQL.`);
+    showToast(`Đã kiểm tra ${validDbCount}/${importedStudents.length} sinh viên hợp lệ từ PostgreSQL.`);
   };
 
   window.onClassCreated = function (res) {

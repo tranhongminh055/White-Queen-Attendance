@@ -388,7 +388,29 @@ public sealed class MainForm : Form
                 rows.Add(rowMap);
         }
 
-        if (rows.Count == 0) return Array.Empty<string>();
+        if (rows.Count == 0)
+            throw new InvalidDataException("AI phát hiện file Excel trống, không có dữ liệu thông tin sinh viên.");
+
+        // AI Semantic Document Classifier: quét toàn bộ tiêu đề & nội dung mẫu để nhận diện loại tài liệu
+        var allSampleText = string.Join(" ", rows.Take(20).SelectMany(r => r.Values)).ToLowerInvariant();
+        var headerCandidateText = string.Join(" ", rows.Take(8).SelectMany(r => r.Values)).ToLowerInvariant();
+
+        string[] studentSignals = { "mssv", "mã sv", "ma sv", "ma_sv", "masv", "studentid", "student_id", "mã sinh viên", "ma sinh vien", "họ tên", "ho ten", "họ và tên", "sinh viên", "sinh vien", "student name", "lớp", "ngày sinh" };
+        string[] sprintSignals = { "sprint", "backlog", "story point", "assignee", "jira", "epic", "scrum", "user story", "task id", "task name", "estimate", "burn down", "in progress", "feature" };
+        string[] financeSignals = { "hóa đơn", "hoa don", "doanh thu", "chi phí", "chi phi", "đơn giá", "don gia", "thành tiền", "thanh tien", "invoice", "vat", "thuế", "lương", "ngân sách" };
+        string[] scheduleSignals = { "thời khóa biểu", "thoi khoa bieu", "lịch thi", "lich thi", "phòng thi", "ca thi", "giám thị" };
+
+        var studentScore = studentSignals.Count(k => headerCandidateText.Contains(k));
+        var sprintScore = sprintSignals.Count(k => allSampleText.Contains(k));
+        var financeScore = financeSignals.Count(k => allSampleText.Contains(k));
+        var scheduleScore = scheduleSignals.Count(k => allSampleText.Contains(k));
+
+        if (sprintScore >= 2 && studentScore == 0)
+            throw new InvalidDataException("AI nhận diện đây là file Quản lý Sprint / Công việc dự án (Agile), KHÔNG phải dữ liệu thông tin sinh viên!");
+        if (financeScore >= 2 && studentScore == 0)
+            throw new InvalidDataException("AI nhận diện đây là file Tài chính / Hóa đơn, KHÔNG phải dữ liệu thông tin sinh viên!");
+        if (scheduleScore >= 2 && studentScore == 0)
+            throw new InvalidDataException("AI nhận diện đây là file Thời khóa biểu / Lịch thi, KHÔNG phải danh sách sinh viên!");
 
         var headerRowIdx = -1;
         var mssvCol = -1;
@@ -398,7 +420,7 @@ public sealed class MainForm : Form
             foreach (var kv in rows[r])
             {
                 var h = kv.Value.Trim().ToUpperInvariant();
-                if (h is "MSSV" or "MA_SV" or "MASV" or "STUDENTID" or "STUDENT_ID" or "MÃ SV" or "MA SV" or "ID")
+                if (h is "MSSV" or "MA_SV" or "MASV" or "STUDENTID" or "STUDENT_ID" or "MÃ SV" or "MA SV" or "MÃ SINH VIÊN" or "MA SINH VIEN")
                 {
                     headerRowIdx = r;
                     mssvCol = kv.Key;
@@ -408,7 +430,8 @@ public sealed class MainForm : Form
             if (headerRowIdx >= 0) break;
         }
 
-        if (headerRowIdx < 0)
+        var hasExplicitHeader = headerRowIdx >= 0;
+        if (!hasExplicitHeader)
         {
             for (var r = 0; r < scanLimit; r++)
             {
@@ -425,15 +448,40 @@ public sealed class MainForm : Form
         if (mssvCol < 0) mssvCol = 0;
         var startIdx = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
         var result = new List<string>();
+        var invalidCount = 0;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var i = startIdx; i < rows.Count; i++)
         {
             if (!rows[i].TryGetValue(mssvCol, out var rawId)) continue;
             var id = rawId.Trim().ToUpperInvariant();
-            if (!string.IsNullOrWhiteSpace(id) && seen.Add(id))
-                result.Add(id);
+            if (string.IsNullOrWhiteSpace(id)) continue;
+            if (IsValidStudentId(id))
+            {
+                if (seen.Add(id)) result.Add(id);
+            }
+            else
+            {
+                invalidCount++;
+            }
+        }
+
+        if (result.Count == 0 || (!hasExplicitHeader && invalidCount > result.Count) || (studentScore == 0 && !hasExplicitHeader && result.Count < 1))
+        {
+            throw new InvalidDataException("AI phân tích cấu trúc file thấy đây KHÔNG phải dữ liệu thông tin sinh viên (thiếu cột MSSV / Họ tên hoặc mã sinh viên hợp lệ như SV-7142).");
         }
         return result.ToArray();
+    }
+
+    private static bool IsValidStudentId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Length < 4 || id.Length > 16) return false;
+        var digits = 0;
+        foreach (var ch in id)
+        {
+            if (ch is >= '0' and <= '9') digits++;
+            else if (ch is not ((>= 'A' and <= 'Z') or '-')) return false;
+        }
+        return digits >= 3;
     }
 
     private static int ParseExcelColumnIndex(string? cellRef, int fallbackCol)
