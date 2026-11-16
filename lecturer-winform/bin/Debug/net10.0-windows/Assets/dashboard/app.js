@@ -1234,7 +1234,7 @@
       semester,
       scheduleText,
       roomText,
-      studentIds: validIds,
+      studentIds: [],
       rosterEntries: importedRosterEntries,
       expectedTotal
     });
