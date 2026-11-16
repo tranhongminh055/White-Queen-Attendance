@@ -155,6 +155,12 @@ class LegacyMigrateRequest(BaseModel):
     attendanceLogs: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class RosterEntry(BaseModel):
+    studentId: str = Field(..., min_length=2, max_length=32)
+    fullName: str = Field(default="", max_length=120)
+    email: str = Field(default="", max_length=120)
+
+
 class CreateClassRequest(BaseModel):
     className: str = Field(..., min_length=2, max_length=160)
     joinCode: str | None = Field(default=None, max_length=24)
@@ -163,6 +169,7 @@ class CreateClassRequest(BaseModel):
     scheduleText: str = Field(default="", max_length=160)
     roomText: str = Field(default="", max_length=80)
     studentIds: list[str] = Field(default_factory=list)
+    rosterEntries: list[RosterEntry] = Field(default_factory=list)
     expectedTotal: int = Field(default=0, ge=0, le=5000)
 
 
@@ -935,7 +942,17 @@ def create_class(payload: CreateClassRequest):
         if cur.fetchone():
             raise HTTPException(status_code=409, detail=f"Mã lớp {join_code} đã tồn tại. Vui lòng chọn mã khác.")
 
-        expected_total = max(int(payload.expectedTotal or 0), len(payload.studentIds or []))
+        roster_map: dict[str, tuple[str, str]] = {}
+        for entry in payload.rosterEntries or []:
+            rsid = re.sub(r"[\x00-\x1f\x7f]+", "", str(entry.studentId or "")).strip().upper()
+            if rsid and rsid not in roster_map:
+                roster_map[rsid] = (str(entry.fullName or "").strip(), str(entry.email or "").strip().lower())
+        for raw_sid in payload.studentIds or []:
+            rsid = re.sub(r"[\x00-\x1f\x7f]+", "", str(raw_sid or "")).strip().upper()
+            if rsid and rsid not in roster_map:
+                roster_map[rsid] = ("", "")
+
+        expected_total = max(int(payload.expectedTotal or 0), len(roster_map), len(payload.studentIds or []))
         cur.execute(
             """
             INSERT INTO Classes (Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText, ExpectedTotal)
@@ -953,6 +970,17 @@ def create_class(payload: CreateClassRequest):
                 expected_total,
             ),
         )
+
+        for rsid, (rname, remail) in roster_map.items():
+            cur.execute(
+                """
+                INSERT INTO ClassRoster (ClassId, StudentId, FullName, Email)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (ClassId, StudentId) DO UPDATE
+                SET FullName = EXCLUDED.FullName, Email = EXCLUDED.Email
+                """,
+                (class_id, rsid, rname, remail),
+            )
 
         added_count = 0
         seen_ids: set[str] = set()
@@ -1055,6 +1083,10 @@ def get_student_classes(student_id: str):
         conn.close()
 
 
+def _norm_vi_name(name: str) -> str:
+    return re.sub(r"\s+", " ", (name or "").strip()).lower()
+
+
 @app.post("/api/students/{student_id}/classes/join")
 def join_class_by_code(student_id: str, payload: JoinClassRequest):
     sid = student_id.strip().upper()
@@ -1062,14 +1094,14 @@ def join_class_by_code(student_id: str, payload: JoinClassRequest):
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT EmployeeId FROM Accounts WHERE UPPER(EmployeeId) = ?", (sid,))
+        cur.execute("SELECT EmployeeId, FullName, Email FROM Accounts WHERE UPPER(EmployeeId) = ?", (sid,))
         acc = cur.fetchone()
         if not acc:
             raise HTTPException(status_code=404, detail=f"Không tìm thấy tài khoản sinh viên {sid}.")
 
         cur.execute(
             """
-            SELECT Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText
+            SELECT Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText, ExpectedTotal
             FROM Classes
             WHERE UPPER(JoinCode) = ? OR UPPER(Id) = ?
             """,
@@ -1089,14 +1121,51 @@ def join_class_by_code(student_id: str, payload: JoinClassRequest):
         if cur.fetchone():
             raise HTTPException(status_code=409, detail=f"Bạn đã tham gia lớp {cls_row[1]} ({cls_row[2]}) rồi.")
 
+        # Kiểm tra danh sách Excel (ClassRoster) nếu giảng viên đã import danh sách khi tạo lớp
+        cur.execute("SELECT COUNT(*) FROM ClassRoster WHERE UPPER(ClassId) = ?", (cls_row[0].upper(),))
+        roster_total = int((cur.fetchone() or [0])[0] or 0)
+        if roster_total > 0:
+            cur.execute(
+                "SELECT StudentId, FullName, Email FROM ClassRoster WHERE UPPER(ClassId) = ? AND UPPER(StudentId) = ?",
+                (cls_row[0].upper(), acc[0].upper()),
+            )
+            r_row = cur.fetchone()
+            if not r_row:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"MSSV {acc[0]} không có trong danh sách sinh viên của lớp {cls_row[1]}. Không được phép tham gia lớp!",
+                )
+            roster_name = str(r_row[1] or "").strip()
+            acc_name = str(acc[1] or "").strip()
+            if roster_name and _norm_vi_name(acc_name) != _norm_vi_name(roster_name):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Thông tin họ tên tài khoản ({acc_name}) không khớp với danh sách lớp ({roster_name}). Không thể tham gia lớp!",
+                )
+            roster_email = str(r_row[2] or "").strip().lower()
+            acc_email = str(acc[2] or "").strip().lower()
+            if roster_email and acc_email and acc_email != roster_email:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Email tài khoản ({acc_email}) không khớp với danh sách lớp ({roster_email}). Không thể tham gia lớp!",
+                )
+
+        cur.execute("SELECT COUNT(*) FROM ClassMembers WHERE ClassId = ?", (cls_row[0],))
+        current_count = int((cur.fetchone() or [0])[0] or 0)
+        expected_cap = int(cls_row[8] or 0)
+        if expected_cap > 0 and current_count >= expected_cap:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Lớp {cls_row[1]} đã đủ sĩ số tối đa ({current_count}/{expected_cap}).",
+            )
+
         cur.execute(
             "INSERT INTO ClassMembers (ClassId, StudentId) VALUES (?, ?)",
             (cls_row[0], acc[0]),
         )
-        cur.execute("SELECT COUNT(*) FROM ClassMembers WHERE ClassId = ?", (cls_row[0],))
-        total = int((cur.fetchone() or [0])[0])
+        total = current_count + 1
         conn.commit()
-        return _format_class_row(cls_row, total)
+        return _format_class_row(cls_row, total, expected_cap)
     finally:
         conn.close()
 

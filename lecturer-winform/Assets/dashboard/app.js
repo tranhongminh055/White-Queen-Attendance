@@ -23,6 +23,7 @@
 
   // State for Dedicated Create Class Page
   let importedStudents = []; // [{ id, exists, fullName, email, embeddingCreated }]
+  let importedRosterEntries = []; // [{ studentId, fullName, email }]
   let activeImportFilter = 'all';
 
   const classesGrid = document.getElementById('classesGrid');
@@ -945,6 +946,7 @@
     document.getElementById('fileProgressBox').style.display = 'none';
     generateJoinCode();
     importedStudents = [];
+    importedRosterEntries = [];
     renderPreviewStudents();
     switchView('create-class');
     setTimeout(() => document.getElementById('inputClassName').focus(), 60);
@@ -992,6 +994,8 @@
     const splitCols = (line) => line.split(/[,;\t]/).map((c) => c.trim().replace(/^"|"$/g, ''));
     const firstCols = splitCols(lines[0]).map((c) => c.toUpperCase());
     let mssvCol = firstCols.findIndex((c) => ['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'MÃ SV', 'MA SV'].includes(c));
+    const nameCol = firstCols.findIndex((c) => ['HỌ VÀ TÊN', 'HO VA TEN', 'HỌ TÊN', 'HO TEN', 'FULLNAME', 'FULL NAME', 'NAME'].includes(c));
+    const emailCol = firstCols.findIndex((c) => ['EMAIL', 'MAIL', 'E-MAIL'].includes(c));
     const hasHeader = mssvCol !== -1 || firstCols.includes('STT');
     if (mssvCol === -1) {
       mssvCol = firstCols[0] === 'STT' && firstCols.length > 1 ? 1 : 0;
@@ -999,6 +1003,8 @@
 
     const startRow = hasHeader ? 1 : 0;
     const ids = [];
+    const entries = [];
+    const seen = new Set();
     for (let i = startRow; i < lines.length; i++) {
       const cols = splitCols(lines[i]);
       const val = (cols[mssvCol] || '').replace(/[\x00-\x1f\x7f]+/g, '').trim().toUpperCase();
@@ -1006,19 +1012,26 @@
         val &&
         !['MSSV', 'MA_SV', 'MASV', 'STUDENTID', 'STUDENT_ID', 'ID'].includes(val) &&
         /^[A-Z0-9-]{4,16}$/.test(val) &&
-        (val.match(/\d/g) || []).length >= 3
+        (val.match(/\d/g) || []).length >= 3 &&
+        !seen.has(val)
       ) {
+        seen.add(val);
         ids.push(val);
+        entries.push({
+          studentId: val,
+          fullName: nameCol >= 0 ? String(cols[nameCol] || '').trim() : '',
+          email: emailCol >= 0 ? String(cols[emailCol] || '').trim() : ''
+        });
       }
     }
-    const unique = Array.from(new Set(ids));
-    if (!unique.length) {
+    if (!ids.length) {
       return {
         ids: [],
+        entries: [],
         aiError: 'AI phân tích dữ liệu cho thấy đây KHÔNG phải danh sách thông tin sinh viên (không tìm thấy cột MSSV hợp lệ).'
       };
     }
-    return { ids: unique, aiError: '' };
+    return { ids, entries, aiError: '' };
   }
 
   function addIdsAndLookup(newIds) {
@@ -1120,11 +1133,12 @@
         failUpload('File chứa dữ liệu nhị phân không hợp lệ. Vui lòng tải file văn bản .csv hoặc .txt.');
         return;
       }
-      const { ids, aiError } = extractStudentIdsFromText(content);
+      const { ids, entries, aiError } = extractStudentIdsFromText(content);
       if (aiError || !ids.length) {
         failUpload(aiError || 'AI không tìm thấy dữ liệu thông tin sinh viên hợp lệ trong file.');
         return;
       }
+      importedRosterEntries = entries || [];
       setCsvUploadError('', true);
       document.getElementById('fpStatus').textContent = `✓ AI XÁC NHẬN DỮ LIỆU SINH VIÊN · ${ids.length} MSSV`;
       addIdsAndLookup(ids);
@@ -1212,7 +1226,7 @@
     errBox.textContent = '';
 
     const validIds = importedStudents.filter((s) => s.exists).map((s) => s.id);
-    const expectedTotal = Math.max(importedStudents.length, validIds.length);
+    const expectedTotal = Math.max(importedStudents.length, importedRosterEntries.length, validIds.length);
     postMsg({
       action: 'class_create',
       className,
@@ -1221,6 +1235,7 @@
       scheduleText,
       roomText,
       studentIds: validIds,
+      rosterEntries: importedRosterEntries,
       expectedTotal
     });
   });
@@ -1849,9 +1864,13 @@
       const msg = `Không thể đọc danh sách sinh viên từ file${detail}.`;
       const box = document.getElementById('fileProgressBox');
       if (box) box.style.display = 'none';
+      importedRosterEntries = [];
       setCsvUploadError(msg);
       showToast(msg, 'error');
       return;
+    }
+    if (Array.isArray(res?.rosterEntries) && res.rosterEntries.length) {
+      importedRosterEntries = res.rosterEntries;
     }
     importedStudents = res.data;
     const validDbCount = importedStudents.filter((s) => s.exists).length;

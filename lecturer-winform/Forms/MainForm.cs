@@ -200,6 +200,14 @@ public sealed class MainForm : Form
                         var expectedTotal = doc.RootElement.TryGetProperty("expectedTotal", out var expEl) && expEl.TryGetInt32(out var expVal)
                             ? expVal
                             : studentIds.Length;
+                        var rosterEntries = doc.RootElement.TryGetProperty("rosterEntries", out var rEl) && rEl.ValueKind == JsonValueKind.Array
+                            ? rEl.EnumerateArray().Select(item => (object)new
+                            {
+                                studentId = item.TryGetProperty("studentId", out var p1) ? p1.GetString() ?? string.Empty : string.Empty,
+                                fullName = item.TryGetProperty("fullName", out var p2) ? p2.GetString() ?? string.Empty : string.Empty,
+                                email = item.TryGetProperty("email", out var p3) ? p3.GetString() ?? string.Empty : string.Empty
+                            }).ToArray()
+                            : Array.Empty<object>();
                         var (ok, respJson) = await _apiClient.CreateClassRawAsync(
                             lecturerId,
                             Str("className"),
@@ -208,7 +216,8 @@ public sealed class MainForm : Form
                             Str("scheduleText"),
                             Str("roomText"),
                             studentIds,
-                            expectedTotal
+                            expectedTotal,
+                            rosterEntries
                         );
                         var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
                         await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassCreated && window.onClassCreated({payload})");
@@ -231,9 +240,11 @@ public sealed class MainForm : Form
                         try
                         {
                             var b64 = doc.RootElement.TryGetProperty("base64", out var bEl) ? bEl.GetString() ?? string.Empty : string.Empty;
-                            var ids = ExtractStudentIdsFromXlsx(Convert.FromBase64String(b64));
+                            var rosterEntries = ExtractRosterEntriesFromXlsx(Convert.FromBase64String(b64));
+                            var ids = rosterEntries.Select(r => r.studentId).ToArray();
                             var (ok, respJson) = await _apiClient.LookupStudentsRawAsync(ids);
-                            var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
+                            var rosterJson = JsonSerializer.Serialize(rosterEntries);
+                            var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson},\"rosterEntries\":{rosterJson}}}";
                             await _webView.CoreWebView2.ExecuteScriptAsync($"window.onStudentsLookup && window.onStudentsLookup({payload})");
                         }
                         catch (Exception ex)
@@ -340,7 +351,9 @@ public sealed class MainForm : Form
         }
     }
 
-    private static string[] ExtractStudentIdsFromXlsx(byte[] xlsxBytes)
+    private sealed record RosterEntryDto(string studentId, string fullName, string email);
+
+    private static RosterEntryDto[] ExtractRosterEntriesFromXlsx(byte[] xlsxBytes)
     {
         using var ms = new MemoryStream(xlsxBytes);
         using var zip = new ZipArchive(ms, ZipArchiveMode.Read);
@@ -360,7 +373,7 @@ public sealed class MainForm : Form
 
         var sheetEntry = zip.GetEntry("xl/worksheets/sheet1.xml")
             ?? zip.Entries.FirstOrDefault(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase));
-        if (sheetEntry is null) return Array.Empty<string>();
+        if (sheetEntry is null) return Array.Empty<RosterEntryDto>();
 
         using var sheetStream = sheetEntry.Open();
         var sheetDoc = XDocument.Load(sheetStream);
@@ -450,8 +463,22 @@ public sealed class MainForm : Form
         }
 
         if (mssvCol < 0) mssvCol = 0;
+        var nameCol = -1;
+        var emailCol = -1;
+        if (headerRowIdx >= 0 && headerRowIdx < rows.Count)
+        {
+            foreach (var kv in rows[headerRowIdx])
+            {
+                var h = kv.Value.Trim().ToUpperInvariant();
+                if (nameCol < 0 && h is "HỌ VÀ TÊN" or "HO VA TEN" or "HỌ TÊN" or "HO TEN" or "FULLNAME" or "FULL NAME" or "NAME" or "TÊN SV" or "TEN SV")
+                    nameCol = kv.Key;
+                if (emailCol < 0 && h is "EMAIL" or "MAIL" or "E-MAIL")
+                    emailCol = kv.Key;
+            }
+        }
+
         var startIdx = headerRowIdx >= 0 ? headerRowIdx + 1 : 0;
-        var result = new List<string>();
+        var result = new List<RosterEntryDto>();
         var invalidCount = 0;
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var i = startIdx; i < rows.Count; i++)
@@ -461,7 +488,12 @@ public sealed class MainForm : Form
             if (string.IsNullOrWhiteSpace(id)) continue;
             if (IsValidStudentId(id))
             {
-                if (seen.Add(id)) result.Add(id);
+                if (seen.Add(id))
+                {
+                    var fullName = nameCol >= 0 && rows[i].TryGetValue(nameCol, out var nVal) ? nVal.Trim() : string.Empty;
+                    var email = emailCol >= 0 && rows[i].TryGetValue(emailCol, out var eVal) ? eVal.Trim() : string.Empty;
+                    result.Add(new RosterEntryDto(id, fullName, email));
+                }
             }
             else
             {

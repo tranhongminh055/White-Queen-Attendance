@@ -276,7 +276,8 @@ public sealed class ApiClient
         string scheduleText,
         string roomText,
         string[] studentIds,
-        int expectedTotal = 0)
+        int expectedTotal = 0,
+        object[]? rosterEntries = null)
     {
         try
         {
@@ -289,7 +290,8 @@ public sealed class ApiClient
                 scheduleText,
                 roomText,
                 studentIds,
-                expectedTotal
+                expectedTotal,
+                rosterEntries = rosterEntries ?? Array.Empty<object>()
             });
             var body = await resp.Content.ReadAsStringAsync();
             return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);
