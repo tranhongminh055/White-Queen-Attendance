@@ -275,7 +275,8 @@ public sealed class ApiClient
         string semester,
         string scheduleText,
         string roomText,
-        string[] studentIds)
+        string[] studentIds,
+        int expectedTotal = 0)
     {
         try
         {
@@ -287,7 +288,8 @@ public sealed class ApiClient
                 semester = string.IsNullOrWhiteSpace(semester) ? "HK1 2025-2026" : semester,
                 scheduleText,
                 roomText,
-                studentIds
+                studentIds,
+                expectedTotal
             });
             var body = await resp.Content.ReadAsStringAsync();
             return (resp.IsSuccessStatusCode, string.IsNullOrWhiteSpace(body) ? "{}" : body);

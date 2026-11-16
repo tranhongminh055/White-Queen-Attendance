@@ -163,6 +163,7 @@ class CreateClassRequest(BaseModel):
     scheduleText: str = Field(default="", max_length=160)
     roomText: str = Field(default="", max_length=80)
     studentIds: list[str] = Field(default_factory=list)
+    expectedTotal: int = Field(default=0, ge=0, le=5000)
 
 
 class LookupStudentsRequest(BaseModel):
@@ -874,7 +875,8 @@ def face_login(payload: FaceLoginRequest):
         conn.close()
 
 
-def _format_class_row(row: tuple[Any, ...], total_students: int = 0) -> dict[str, Any]:
+def _format_class_row(row: tuple[Any, ...], total_students: int = 0, expected_total: int = 0) -> dict[str, Any]:
+    exp = expected_total if expected_total > 0 else total_students
     return {
         "id": row[0],
         "className": row[1],
@@ -885,6 +887,7 @@ def _format_class_row(row: tuple[Any, ...], total_students: int = 0) -> dict[str
         "scheduleText": row[6] or "",
         "roomText": row[7] or "",
         "totalStudents": total_students,
+        "expectedTotal": max(exp, total_students),
     }
 
 
@@ -932,10 +935,11 @@ def create_class(payload: CreateClassRequest):
         if cur.fetchone():
             raise HTTPException(status_code=409, detail=f"Mã lớp {join_code} đã tồn tại. Vui lòng chọn mã khác.")
 
+        expected_total = max(int(payload.expectedTotal or 0), len(payload.studentIds or []))
         cur.execute(
             """
-            INSERT INTO Classes (Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO Classes (Id, ClassName, JoinCode, Semester, LecturerId, LecturerName, ScheduleText, RoomText, ExpectedTotal)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 class_id,
@@ -946,6 +950,7 @@ def create_class(payload: CreateClassRequest):
                 lecturer[1],
                 payload.scheduleText.strip(),
                 payload.roomText.strip(),
+                expected_total,
             ),
         )
 
@@ -972,6 +977,7 @@ def create_class(payload: CreateClassRequest):
                 added_count += 1
 
         conn.commit()
+        final_expected = max(expected_total, added_count)
         return {
             "id": class_id,
             "className": payload.className.strip(),
@@ -982,6 +988,7 @@ def create_class(payload: CreateClassRequest):
             "scheduleText": payload.scheduleText.strip(),
             "roomText": payload.roomText.strip(),
             "totalStudents": added_count,
+            "expectedTotal": final_expected,
         }
     finally:
         conn.close()
@@ -996,16 +1003,16 @@ def get_lecturer_classes(lecturer_id: str):
         cur.execute(
             """
             SELECT c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName,
-                   c.ScheduleText, c.RoomText, COUNT(m.Id) AS TotalStudents
+                   c.ScheduleText, c.RoomText, COUNT(m.Id) AS TotalStudents, c.ExpectedTotal
             FROM Classes c
             LEFT JOIN ClassMembers m ON m.ClassId = c.Id
             WHERE UPPER(c.LecturerId) = ?
-            GROUP BY c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName, c.ScheduleText, c.RoomText, c.CreatedAt
+            GROUP BY c.Id, c.ClassName, c.JoinCode, c.Semester, c.LecturerId, c.LecturerName, c.ScheduleText, c.RoomText, c.ExpectedTotal, c.CreatedAt
             ORDER BY c.CreatedAt DESC
             """,
             (lid,),
         )
-        return [_format_class_row(row, int(row[8] or 0)) for row in cur.fetchall()]
+        return [_format_class_row(row, int(row[8] or 0), int(row[9] or 0)) for row in cur.fetchall()]
     finally:
         conn.close()
 

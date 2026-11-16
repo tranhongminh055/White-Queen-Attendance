@@ -136,7 +136,7 @@
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
                   <circle cx="9" cy="7" r="4"/>
                 </svg>
-                <span>${cls.totalStudents || 0} sinh viên đã tham gia</span>
+                <span>${Number(cls.totalStudents || 0)}/${Math.max(Number(cls.expectedTotal || 0), Number(cls.totalStudents || 0))} sinh viên đã tham gia</span>
               </div>
             </div>
             <div class="card-actions">
@@ -297,7 +297,7 @@
             </div>
 
             <div class="hist-card-stats">
-              <span>👥 ${Number(cls.totalStudents || 0)} SV</span>
+              <span>👥 ${Number(cls.totalStudents || 0)}/${Math.max(Number(cls.expectedTotal || 0), Number(cls.totalStudents || 0))} SV</span>
               <span>📅 ${sesCount} buổi</span>
             </div>
 
@@ -354,7 +354,7 @@
       <span>·</span>
       <span>📍 ${escapeHtml(cls?.roomText || 'Phòng học')}</span>
       <span>·</span>
-      <span>👥 ${Number(cls?.totalStudents || 0)} SINH VIÊN</span>
+      <span>👥 ${Number(cls?.totalStudents || 0)}/${Math.max(Number(cls?.expectedTotal || 0), Number(cls?.totalStudents || 0))} SINH VIÊN</span>
     `;
     document.getElementById('hsRatingSem').textContent = cls?.semester || '';
 
@@ -1039,7 +1039,8 @@
 
   function renderPreviewStudents() {
     const validCount = importedStudents.filter((s) => s.exists).length;
-    document.getElementById('validAssignCount').textContent = validCount;
+    const totalFromFile = importedStudents.length;
+    document.getElementById('validAssignCount').textContent = totalFromFile > 0 ? `${validCount}/${totalFromFile}` : '0';
   }
 
   function handleCsvFile(file) {
@@ -1211,6 +1212,7 @@
     errBox.textContent = '';
 
     const validIds = importedStudents.filter((s) => s.exists).map((s) => s.id);
+    const expectedTotal = Math.max(importedStudents.length, validIds.length);
     postMsg({
       action: 'class_create',
       className,
@@ -1218,7 +1220,8 @@
       semester,
       scheduleText,
       roomText,
-      studentIds: validIds
+      studentIds: validIds,
+      expectedTotal
     });
   });
 

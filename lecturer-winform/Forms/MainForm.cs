@@ -197,6 +197,9 @@ public sealed class MainForm : Form
                         var studentIds = doc.RootElement.TryGetProperty("studentIds", out var sEl) && sEl.ValueKind == JsonValueKind.Array
                             ? sEl.EnumerateArray().Select(x => x.GetString() ?? string.Empty).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray()
                             : Array.Empty<string>();
+                        var expectedTotal = doc.RootElement.TryGetProperty("expectedTotal", out var expEl) && expEl.TryGetInt32(out var expVal)
+                            ? expVal
+                            : studentIds.Length;
                         var (ok, respJson) = await _apiClient.CreateClassRawAsync(
                             lecturerId,
                             Str("className"),
@@ -204,7 +207,8 @@ public sealed class MainForm : Form
                             Str("semester"),
                             Str("scheduleText"),
                             Str("roomText"),
-                            studentIds
+                            studentIds,
+                            expectedTotal
                         );
                         var payload = $"{{\"ok\":{(ok ? "true" : "false")},\"data\":{respJson}}}";
                         await _webView.CoreWebView2.ExecuteScriptAsync($"window.onClassCreated && window.onClassCreated({payload})");
