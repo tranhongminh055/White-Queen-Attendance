@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("WhiteQueenLecturer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+964db22c3c69bc507cdfe148711b504048d4cee8")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+173a7dbbbc8986c6011b331bfaa754dfff8a77c8")]
 [assembly: System.Reflection.AssemblyProductAttribute("WhiteQueenLecturer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("WhiteQueenLecturer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
